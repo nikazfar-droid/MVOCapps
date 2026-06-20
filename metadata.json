@@ -1,0 +1,6 @@
+{
+  "name": "MVOC Member Login",
+  "description": "Progressive Web Application (PWA) portal for the Malaysia Veloz Owner Club (MVOC) with offline availability and remote data synchronization.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Registered member profile synchronized from Google Sheets",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique Firebase Authentication UID of the logged-in user" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Google email address of the user used for Gmail login" },
+        "mvocId": { "type": "string", "description": " Malaysia Veloz Owner Community ID" },
+        "chapter": { "type": "string", "description": "Subang/Selangor/KL regional chapter" },
+        "tier": { "type": "string", "enum": ["GOLD", "STANDARD"], "description": "Membership tier (e.g. GOLD or STANDARD BENEFITS)" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "member"], "description": "User hierarchy role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Date when profile was first synced" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Date of last sync modification" }
+      },
+      "required": ["uid", "name", "email", "mvocId", "chapter", "tier", "role"]
+    },
+    "Contact": {
+      "title": "Contact Exchange",
+      "description": "Exchanged memberships contacts captured via QR scan",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The custom UID of the contact member" },
+        "name": { "type": "string", "description": "Name of the target member" },
+        "email": { "type": "string", "description": "Email address of the target member" },
+        "mvocId": { "type": "string", "description": "Target member community identifier" },
+        "chapter": { "type": "string", "description": "Target regional chapter" },
+        "tier": { "type": "string", "description": "Target membership tier" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "exchangedAt": { "type": "string", "format": "date-time", "description": "Date and time of contact scan" }
+      },
+      "required": ["name", "email", "mvocId", "chapter", "tier"]
+    },
+    "Merchant": {
+      "title": "Merchant Partner",
+      "description": "Exclusive merchant partners detailing discounts and rewards",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the partner shop" },
+        "category": { "type": "string", "description": "E.g. Service & Repair" },
+        "rating": { "type": "number", "description": "Rating score casted by users" },
+        "image": { "type": "string", "description": "Cover promotional image URL" },
+        "discount": { "type": "string", "description": "Discount offer text" },
+        "discountType": { "type": "string", "description": "gold, standard, featured" },
+        "promoCode": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "discount"]
+    },
+    "MerchantRating": {
+      "title": "Merchant Rating vote log",
+      "description": "Security record tracing rated votes to enforce 1-click-per-user rules",
+      "type": "object",
+      "properties": {
+        "merchantId": { "type": "string" },
+        "userId": { "type": "string" },
+        "votedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["merchantId", "userId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile document indexed by their personal Auth User ID"
+    },
+    "users/{userId}/contacts/{contactMvocId}": {
+      "schema": "Contact",
+      "description": "Contact cards collected via digital QR scanner"
+    },
+    "merchants/{merchantId}": {
+      "schema": "Merchant",
+      "description": "Merchant details and overall rating"
+    },
+    "merchants/{merchantId}/merchantRatings/{ratingId}": {
+      "schema": "MerchantRating",
+      "description": "Vote log storing unique voters to prevent double rating entries"
+    }
+  }
+}

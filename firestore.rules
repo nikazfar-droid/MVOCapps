@@ -1,0 +1,269 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default safety net: deny all access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$'))) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '') == 'nikazfar@gmail.com' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$') ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'member') == 'super_admin'
+        )) ||
+        (exists(/databases/$(database)/documents/Admin/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('email', '') == 'nikazfar@gmail.com' ||
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$') ||
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('role', 'member') == 'super_admin'
+        ))
+      );
+    }
+
+    function isNotSuspended() {
+      return !isSignedIn() || 
+             isSuperAdmin() ||
+             (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) && !exists(/databases/$(database)/documents/Admin/$(request.auth.uid))) ||
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', 'active') != 'suspended') ||
+             (exists(/databases/$(database)/documents/Admin/$(request.auth.uid)) && get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('status', 'active') != 'suspended');
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() && (
+        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$'))) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '') == 'nikazfar@gmail.com' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$') ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('mvocId', '') == 'MVOC-0001'
+        )) ||
+        (exists(/databases/$(database)/documents/Admin/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('email', '') == 'nikazfar@gmail.com' ||
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$') ||
+          get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('mvocId', '') == 'MVOC-0001'
+        ))
+      );
+    }
+
+    function isAdminOrSuperAdmin() {
+      return isSuperAdmin() || (
+        isSignedIn() && (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'member') == 'admin') ||
+          (exists(/databases/$(database)/documents/Admin/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/Admin/$(request.auth.uid)).data.get('role', 'member') == 'admin')
+        )
+      );
+    }
+
+    function isValidUser(data) {
+      return data.get('mvocId', '') != null && 
+             data.get('mvocId', '').matches('MVOC-\\d{4}');
+    }
+
+    // Secure user profiles matching their unique authentication UID
+    match /users/{userId} {
+      // Allow standard profile owner or administrator to read doc if not suspended
+      allow read: if isSignedIn() && isNotSuspended();
+      
+      // Allow owner to create profile. Force regular users to 'member' role unless they are hardcoded super admin emails.
+      allow create: if isOwner(userId) && (
+        request.resource.data.get('role', 'member') == 'member' || 
+        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
+      ) && isValidUser(request.resource.data) && (
+        request.resource.data.get('mvocId', '') != 'MVOC-0001' ||
+        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
+      );
+      
+      // Allow updates if they are owner or admin/super_admin, with strict master admin protection.
+      // Prevent ANY other user (even other Admins) from deleting or modifying the Master Admin profile.
+      allow update: if isNotSuspended() && (
+        ((resource.data.get('mvocId', '') == 'MVOC-0001') || 
+         (resource.data.get('email', '') == 'nikazfar@gmail.com') ||
+         (resource.data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$')) ||
+         (request.resource.data.get('mvocId', '') == 'MVOC-0001') ||
+         (request.resource.data.get('email', '') == 'nikazfar@gmail.com') ||
+         (request.resource.data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$'))
+        )
+          ? isMasterAdmin()
+          : (isAdminOrSuperAdmin() || (
+              isOwner(userId) && 
+              (request.resource.data.get('role', 'member') == resource.data.get('role', 'member')) &&
+              (request.resource.data.get('tier', 'STANDARD') == resource.data.get('tier', 'STANDARD')) &&
+              (request.resource.data.get('mvocId', '') == resource.data.get('mvocId', '')) &&
+              isValidUser(request.resource.data)
+            ))
+      );
+      
+      // Only allow delete if they are an admin/super_admin AND the target profile is NOT the master admin profile.
+      allow delete: if isNotSuspended() && isAdminOrSuperAdmin() && 
+        (resource.data.get('mvocId', '') != 'MVOC-0001') && 
+        (resource.data.get('email', '') != 'nikazfar@gmail.com') &&
+        (!resource.data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$'));
+
+      match /contacts/{contactMvocId} {
+        allow read, write: if isNotSuspended() && (isOwner(userId) || isSuperAdmin());
+      }
+
+      match /readStatuses/{announcementId} {
+        allow read, write: if isNotSuspended() && (isOwner(userId) || isSuperAdmin());
+      }
+    }
+
+    // Admin list collection matching their unique user ID
+    match /Admin/{adminId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Announcements collection for broadcast messages
+    match /announcements/{announcementId} {
+      allow read: if isNotSuspended() && true;
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Events meetup collection
+    match /events/{eventId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // QR Codes meta-collection
+    match /qrCodes/{qrId} {
+      allow read: if isNotSuspended() && (
+        isAdminOrSuperAdmin() || (
+          isSignedIn() && 
+          resource.data.get('status', 'active') == 'active' && 
+          (resource.data.get('expiresAt', null) == null || resource.data.get('expiresAt', null) > request.time)
+        )
+      );
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Attendance session logs
+    match /attendance/{sessionId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+
+      match /attendees/{userId} {
+        allow read: if isNotSuspended() && (isOwner(userId) || isAdminOrSuperAdmin());
+        allow write: if isNotSuspended() && (isOwner(userId) || isAdminOrSuperAdmin()) && (
+          isAdminOrSuperAdmin() || (
+            !exists(/databases/$(database)/documents/qrCodes/$(sessionId)) || (
+              get(/databases/$(database)/documents/qrCodes/$(sessionId)).data.get('status', 'active') == 'active' &&
+              (
+                get(/databases/$(database)/documents/qrCodes/$(sessionId)).data.get('expiresAt', null) == null ||
+                get(/databases/$(database)/documents/qrCodes/$(sessionId)).data.get('expiresAt', null) > request.time
+              )
+            )
+          )
+        );
+      }
+    }
+
+    // Gallery albums collection
+    match /gallery/{albumId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Convoys collection
+    match /convoys/{convoyId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Scan Logs collection
+    match /scanLogs/{logId} {
+      allow get: if isNotSuspended() && (isSignedIn() && (resource.data.uid == request.auth.uid || isAdminOrSuperAdmin()));
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdminOrSuperAdmin());
+      allow create: if isNotSuspended() && isSignedIn();
+      allow update, delete: if isNotSuspended() && isAdminOrSuperAdmin();
+    }
+
+    // Convoy Registrations collection
+    match /convoy_registrations/{registrationId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isSignedIn();
+    }
+
+    // Merchants collection
+    match /merchants/{merchantId} {
+      allow read: if isNotSuspended();
+      allow create: if isNotSuspended() && (isAdminOrSuperAdmin() || isSignedIn());
+      allow update: if isNotSuspended() && (
+        isAdminOrSuperAdmin() || 
+        (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating']))
+      );
+      allow delete: if isNotSuspended() && (isSuperAdmin() || (isAdminOrSuperAdmin() && 'createdBy' in resource.data && resource.data.createdBy == request.auth.uid));
+
+      match /merchantRatings/{ratingId} {
+        allow read: if isNotSuspended();
+        allow create: if isNotSuspended() && isSignedIn() && request.resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // Support collection group queries for merchantRatings
+    match /{path=**}/merchantRatings/{ratingId} {
+      allow read: if isNotSuspended();
+      allow create: if isNotSuspended() && isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Settings collection for system-wide configuration
+    match /settings/{documentId} {
+      allow read: if isNotSuspended() && isSignedIn();
+      allow write: if isNotSuspended() && isSuperAdmin();
+    }
+
+    // Zone Hubs collection for regional metadata
+    match /zoneHubs/{zoneId} {
+      allow read: if isNotSuspended() && true;
+      allow write: if isNotSuspended() && (isSuperAdmin() || isAdminOrSuperAdmin());
+    }
+
+    // Chapters and their sub-collections (members, join_requests)
+    match /chapters/{chapterId} {
+      allow read: if isNotSuspended() && true;
+      allow write: if isNotSuspended() && (isSuperAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/chapters/$(chapterId)) &&
+        get(/databases/$(database)/documents/chapters/$(chapterId)).data.get('adminId', '') == request.auth.uid
+      ));
+
+      match /members/{userId} {
+        allow read: if isNotSuspended() && isSignedIn();
+        allow write: if isNotSuspended() && (isSuperAdmin() || (
+          isSignedIn() &&
+          exists(/databases/$(database)/documents/chapters/$(chapterId)) &&
+          get(/databases/$(database)/documents/chapters/$(chapterId)).data.get('adminId', '') == request.auth.uid
+        ));
+      }
+
+      match /join_requests/{userId} {
+        allow read: if isNotSuspended() && (
+          request.auth.uid == userId || 
+          isSuperAdmin() || 
+          (exists(/databases/$(database)/documents/chapters/$(chapterId)) &&
+           get(/databases/$(database)/documents/chapters/$(chapterId)).data.get('adminId', '') == request.auth.uid)
+        );
+        allow create: if isNotSuspended() && isSignedIn() && request.auth.uid == userId;
+        allow update, delete: if isNotSuspended() && (isSuperAdmin() || 
+          (isSignedIn() &&
+           exists(/databases/$(database)/documents/chapters/$(chapterId)) &&
+           get(/databases/$(database)/documents/chapters/$(chapterId)).data.get('adminId', '') == request.auth.uid) || 
+          (isSignedIn() && request.auth.uid == userId));
+      }
+    }
+  }
+}

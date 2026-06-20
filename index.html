@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <title>MVOC Malaysia - Veloz Owners Club</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0F2D52" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MVOC Malaysia" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Mendaftarkan Service Worker untuk PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('[PWA] Service Worker berjaya didaftarkan dengan skop:', registration.scope);
+              
+              // 1. Sekiranya terdapat service worker baru yang sedang bersedia (waiting)
+              if (registration.waiting) {
+                console.log('[PWA] Service Worker baru sedia ada menunggu (waiting).');
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('pwa-update-available', { detail: registration }));
+                }, 2000);
+              }
+
+              // 2. Memantau sebarang kemaskini baharu yang bakal dijumpai
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                  newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed') {
+                      if (navigator.serviceWorker.controller) {
+                        // Ada Service Worker sedia ada yang mengawal, bermaksud ini adalah kemaskini baru
+                        console.log('[PWA] Kemasakini baharu telah dimuat turun di latar belakang. Memberitahu pengguna...');
+                        window.dispatchEvent(new CustomEvent('pwa-update-available', { detail: registration }));
+                      }
+                    }
+                  });
+                }
+              });
+            })
+            .catch((err) => {
+              console.error('[PWA] Pendaftaran Service Worker gagal:', err);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
