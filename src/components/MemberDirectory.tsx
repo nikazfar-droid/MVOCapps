@@ -10,7 +10,8 @@ import {
   ShieldCheck, 
   EyeOff,
   MessageSquare,
-  ChevronRight
+  ChevronRight,
+  Code
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -383,7 +384,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                   </div>
                   <p className="text-xs text-slate-400 font-bold mt-0.5 font-mono">MVOC Member ID: {selectedMember.mvocId}</p>
                   {selectedMember.mvocId && selectedMember.mvocId.toUpperCase() === 'MVOC-0001' && (
-                    <div className="mt-2 flex justify-center">
+                    <div className="mt-2 flex justify-center gap-2">
                       <a 
                         href="https://linktr.ee/mvoc" 
                         target="_blank" 
@@ -393,6 +394,10 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                         <ExternalLink className="w-3.5 h-3.5" />
                         <span>Linktree</span>
                       </a>
+                      <span className="inline-flex items-center gap-1.5 text-xs text-[#38BDF8] font-bold bg-[#38BDF8]/10 px-3 py-1.5 rounded-xl border border-[#38BDF8]/20 select-none shadow-[0_0_8px_rgba(56,189,248,0.15)]">
+                        <Code className="w-3.5 h-3.5 text-[#38BDF8]" />
+                        <span>Dev</span>
+                      </span>
                     </div>
                   )}
                   {selectedMember.managedChapter && (
