@@ -1031,9 +1031,11 @@ function AppContent({
   });
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [notificationsCount, setNotificationsCount] = useState(3);
-  const [selectedEventId, setSelectedEventId] = useState<number | null>(() => {
+  const [selectedEventId, setSelectedEventId] = useState<number | string | null>(() => {
     const saved = sessionStorage.getItem('mvoc_selectedEventId');
-    return saved ? parseInt(saved, 10) : null;
+    if (!saved) return null;
+    const parsed = parseInt(saved, 10);
+    return isNaN(parsed) ? saved : parsed;
   });
   
   useEffect(() => {
@@ -1043,6 +1045,7 @@ function AppContent({
       sessionStorage.removeItem('mvoc_selectedEventId');
     }
   }, [selectedEventId]);
+
   const [activeEventSubTab, setActiveEventSubTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
   const [bookmarkedEvents, setBookmarkedEvents] = useState<number[]>([1]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1092,6 +1095,30 @@ function AppContent({
       console.warn("Failed to listen to global platform app settings:", e);
     }
   }, [isLoggedIn]);
+
+  // Redirection guard: automatically redirect to dashboard if user attempts to access a disabled module
+  useEffect(() => {
+    const configTabs: Record<string, string> = {
+      dashboard: 'dashboard',
+      profile: 'profile',
+      vehicle: 'vehicle',
+      card: 'card',
+      events: 'events',
+      convoy: 'convoy',
+      gallery: 'gallery',
+      announcements: 'announcements',
+      chapters: 'chapters',
+      merchants: 'merchants',
+      members: 'directory',
+      directory: 'directory'
+    };
+
+    const configKey = configTabs[currentTab];
+    if (configKey && !isModuleEnabled(configKey)) {
+      setCurrentTab('dashboard');
+      triggerToast('This module is temporarily disabled by the administrator.', 'warning');
+    }
+  }, [currentTab, appConfig, isSuperAdmin]);
 
   // Handler to toggle live navigation setting on Firestore doc settings/app_config
   const handleToggleNavModule = async (module: string) => {
@@ -1446,7 +1473,7 @@ function AppContent({
   const [serviceFormCost, setServiceFormCost] = useState('');
   
   // Sample Data matching the Malaysian Toyota Veloz group aesthetic
-  const [events, setEvents] = useState<EventItem[]>([
+  const DEFAULT_SAMPLE_EVENTS: EventItem[] = [
     { 
       id: 1, 
       title: 'Merdeka Charity Convoy', 
@@ -1518,7 +1545,9 @@ function AppContent({
       image: 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=600&auto=format&fit=crop&q=80',
       category: 'completed'
     }
-  ]);
+  ];
+
+  const [events, setEvents] = useState<EventItem[]>(DEFAULT_SAMPLE_EVENTS);
 
   // lifted Gallery Albums to top-level state for real-time interactivity & deletion
   const [galleryAlbums, setGalleryAlbums] = useState([
@@ -1851,10 +1880,18 @@ function AppContent({
         const list: Announcement[] = [];
         snapshot.forEach((docSnap) => {
           const docData = docSnap.data();
+          let title = docData.subject || '';
+          let content = docData.message || '';
+          
+          if (title === "APLIKASI RASMI MVOC BAKAL TIBA!" || title === "Salam Sejahtera seluruh ahli keluarga MVOC.") {
+            title = "OFFICIAL MVOC MOBILE APP COMING SOON!";
+            content = `Dear MVOC members,\n\nOur community is taking a digital leap! The management is thrilled to announce that the MVOC Mobile Application will be launched soon to unify and simplify matters for all members.\n\n🌟 Key App Features:\n\nDigital Member Card: No more lost physical cards, everything is on your phone.\n\nInstant Notifications: Convoy info, events, and official announcements straight to your screen.\n\nEasy Registration: RSVPing for events and convoys is now more systematic.\n\nExclusive Promos: Enjoy special discounts at selected workshops & merchant partners.\n\n📅 Launch:\nThe app will be available on the Google Play Store & App Store. Download links and registration guides will be shared soon. Make sure your phone is ready!\n\nThank you for your continuous support.\n\n"MVOC at Your Fingertips"\n— MVOC Management`;
+          }
+
           list.push({
             id: docSnap.id,
-            title: docData.subject || '',
-            content: docData.message || '',
+            title,
+            content,
             category: 'Official Notices',
             date: docData.timestamp ? new Date(docData.timestamp.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(),
             urgent: docData.audience === 'Admins',
@@ -1894,6 +1931,87 @@ function AppContent({
       console.warn("Failed to set up read statuses listener:", e);
     }
   }, [isLoggedIn]);
+
+  // Events state synchronization with Firestore
+  const [firestoreEvents, setFirestoreEvents] = useState<EventItem[]>([]);
+  const [currentEventIndex, setCurrentEventIndex] = useState(0);
+
+  // Listen to remote events
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setFirestoreEvents([]);
+      return;
+    }
+    try {
+      const eventsRef = collection(db, 'events');
+      const unsubscribe = onSnapshot(eventsRef, (snapshot) => {
+        const list: EventItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const docData = docSnap.data();
+          list.push({
+            id: docSnap.id as any,
+            title: docData.title || '',
+            date: docData.date || '',
+            location: docData.location || '',
+            rsvps: docData.rsvps || 0,
+            limit: docData.limit || 150,
+            featured: docData.featured !== false,
+            registered: docData.registered || false,
+            organizer: docData.organizer || 'HQ',
+            badge: docData.badge || 'OPEN',
+            image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+            category: docData.category || 'upcoming',
+            warningText: docData.warningText || ''
+          });
+        });
+        setFirestoreEvents(list);
+        if (list.length > 0) {
+          setEvents(list);
+        } else {
+          setEvents(DEFAULT_SAMPLE_EVENTS);
+        }
+      }, (error) => {
+        console.error("Error listening to events:", error);
+        setEvents(DEFAULT_SAMPLE_EVENTS);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Failed to set up events listener:", e);
+    }
+  }, [isLoggedIn]);
+
+  // Next Major Event carousel data
+  const sliderEvents = useMemo(() => {
+    if (firestoreEvents && firestoreEvents.length > 0) {
+      return firestoreEvents;
+    }
+    return [
+      {
+        id: 'placeholder',
+        title: 'Genting Highlands Convoy 2024',
+        date: '24 August 2024 • 7:00 AM',
+        image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+        location: 'Awana SkyWay Base Station'
+      }
+    ];
+  }, [firestoreEvents]);
+
+  // Keep index within bounds
+  useEffect(() => {
+    if (currentEventIndex >= sliderEvents.length) {
+      setCurrentEventIndex(0);
+    }
+  }, [sliderEvents, currentEventIndex]);
+
+  // Auto-slide every 5 seconds
+  useEffect(() => {
+    const count = sliderEvents.length;
+    if (count <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentEventIndex((prev) => (prev + 1) % count);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [sliderEvents]);
 
   // Merge static and dynamic announcements filtered by audience targeting rules
   useEffect(() => {
@@ -2637,38 +2755,53 @@ function AppContent({
   }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl]);
 
   const rewardsInfo = useMemo(() => {
-    const xp = userProfile?.points !== undefined ? userProfile.points : 0;
+    const meetsCompliance = userProfile?.disclaimerAccepted === true &&
+      userProfile?.pdpaAccepted === true &&
+      (userProfile?.patch_status === true || userProfile?.officialPatch === true || userProfile?.patch === 'mvoc_trusted_elite');
+
+    if (!meetsCompliance) {
+      return {
+        xp: 0,
+        activeTierLabel: 'LOCKED' as any,
+        currentTierName: 'Tier: LOCKED',
+        progressPercent: 0,
+        nextTierXP: 30,
+        benefitsCount: 0
+      };
+    }
+
+    const xp = userProfile?.points !== undefined ? userProfile.points : 30;
     
     // Determine active tier based on XP
-    let activeTierLabel: 'Silver' | 'Gold' | 'Platinum' = 'Silver';
-    let currentTierName = 'Silver Member';
+    let activeTierLabel: 'Bronze' | 'Silver' | 'Gold' = 'Bronze';
+    let currentTierName = 'Bronze Member';
     
-    if (xp >= 100) {
-      activeTierLabel = 'Platinum';
-      currentTierName = 'Platinum Member';
-    } else if (xp >= 30) {
+    if (xp >= 200) {
       activeTierLabel = 'Gold';
       currentTierName = 'Gold Member';
+    } else if (xp >= 100) {
+      activeTierLabel = 'Silver';
+      currentTierName = 'Silver Member';
     }
     
     // Calculate progress percentage and next tier goals
     let progressPercent = 0;
-    let nextTierXP = 30;
+    let nextTierXP = 100;
     let benefitsCount = 5;
     
-    if (xp >= 100) {
+    if (xp >= 200) {
       progressPercent = 100;
-      nextTierXP = 100;
+      nextTierXP = 200;
       benefitsCount = 20;
-    } else if (xp >= 30) {
-      // Progress between Gold (30) and Platinum (100)
-      progressPercent = Math.min(Math.round(((xp - 30) / 70) * 100), 100);
-      nextTierXP = 100;
+    } else if (xp >= 100) {
+      // Progress between Silver (100) and Gold (200)
+      progressPercent = Math.min(Math.round(50 + ((xp - 100) / 100) * 50), 100);
+      nextTierXP = 200;
       benefitsCount = 12;
     } else {
-      // Progress between Silver (0) and Gold (30)
-      progressPercent = Math.min(Math.round((xp / 30) * 100), 100);
-      nextTierXP = 30;
+      // Progress between Bronze (30) and Silver (100)
+      progressPercent = Math.min(Math.round(15 + ((xp - 30) / 70) * (50 - 15)), 50);
+      nextTierXP = 100;
       benefitsCount = 5;
     }
     
@@ -2680,7 +2813,7 @@ function AppContent({
       nextTierXP,
       benefitsCount
     };
-  }, [userProfile?.points]);
+  }, [userProfile]);
 
   if (isAuthLoading) {
     return (
@@ -3288,45 +3421,54 @@ function AppContent({
                   </div>
 
                   {/* Next Major Event Banner */}
-                  <div className="relative rounded-2xl overflow-hidden aspect-[1.95/1] shadow-md border border-slate-200/50 flex flex-col justify-between p-4 text-white select-none">
-                    {/* Toyota Cockpit Background */}
-                    <img 
-                      src="https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80" 
-                      alt="Veloz Interior Cockpit Steering"
-                      className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
-                    />
-                    
-                    {/* Dark gradient overlap */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                  {sliderEvents[currentEventIndex] && (
+                    <div className="relative rounded-2xl overflow-hidden aspect-[1.95/1] shadow-md border border-slate-200/50 flex flex-col justify-between p-4 text-white select-none w-full">
+                      {/* Toyota Cockpit Background */}
+                      <img 
+                        src={sliderEvents[currentEventIndex].image} 
+                        alt={sliderEvents[currentEventIndex].title}
+                        className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
+                      />
+                      
+                      {/* Dark gradient overlap */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
 
-                    {/* Badge */}
-                    <div className="relative z-10 self-start">
-                      <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
-                        NEXT MAJOR EVENT
-                      </span>
-                    </div>
-
-                    {/* Header, Date, & Register Button */}
-                    <div className="relative z-10 space-y-2">
-                      <div>
-                        <h4 className="text-sm font-extrabold tracking-tight leading-snug">
-                          Genting Highlands Convoy 2024
-                        </h4>
-                        <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
-                          24 August 2024 • 7:00 AM
-                        </p>
+                      {/* Badge */}
+                      <div className="relative z-10 self-start">
+                        <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
+                          NEXT MAJOR EVENT
+                        </span>
                       </div>
-                      <button 
-                        onClick={() => {
-                          setCurrentTab('events');
-                          triggerToast('Registering now for the Genting Highlands Convoy!', 'success');
-                        }}
-                        className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
-                      >
-                        Register Now
-                      </button>
+
+                      {/* Header, Date, & Register Button */}
+                      <div className="relative z-10 space-y-2">
+                        <div>
+                          <h4 className="text-sm font-extrabold tracking-tight leading-snug">
+                            {sliderEvents[currentEventIndex].title}
+                          </h4>
+                          <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
+                            {sliderEvents[currentEventIndex].date}
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const currentEvent = sliderEvents[currentEventIndex];
+                            setCurrentTab('events');
+                            if (currentEvent.id !== 'placeholder') {
+                              setSelectedEventId(currentEvent.id);
+                              triggerToast(`Registering now for ${currentEvent.title}!`, 'success');
+                            } else {
+                              setSelectedEventId(null);
+                              triggerToast('Registering now for the Genting Highlands Convoy!', 'success');
+                            }
+                          }}
+                          className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
+                        >
+                          Register Now
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                 </motion.div>
               )}
@@ -5114,11 +5256,13 @@ function AppContent({
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-black text-[#0F2D52] uppercase tracking-wider">Veloz Tier & Rewards</span>
                       <span className={`text-[10px] font-bold border px-2.5 py-0.5 rounded-full uppercase ${
-                        rewardsInfo.activeTierLabel === 'Platinum' 
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm shadow-indigo-100/50'
-                          : rewardsInfo.activeTierLabel === 'Gold'
+                        rewardsInfo.activeTierLabel === 'LOCKED'
+                          ? 'bg-slate-100 text-slate-400 border-slate-200'
+                          : rewardsInfo.activeTierLabel === 'Gold' 
                           ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm shadow-amber-100/50'
-                          : 'bg-slate-50 text-slate-650 border-slate-200'
+                          : rewardsInfo.activeTierLabel === 'Silver'
+                          ? 'bg-slate-100 text-slate-800 border-slate-300 shadow-sm shadow-slate-100/50'
+                          : 'bg-orange-50 text-orange-850 border-orange-200 shadow-sm shadow-orange-100/50' // Bronze
                       }`}>
                         {rewardsInfo.currentTierName}
                       </span>
@@ -5126,30 +5270,36 @@ function AppContent({
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-bold text-slate-500">
+                        <span className={rewardsInfo.activeTierLabel === 'Bronze' ? "text-[#0F2D52] font-black" : ""}>Bronze {rewardsInfo.activeTierLabel === 'Bronze' ? '(Active)' : ''}</span>
                         <span className={rewardsInfo.activeTierLabel === 'Silver' ? "text-[#0F2D52] font-black" : ""}>Silver {rewardsInfo.activeTierLabel === 'Silver' ? '(Active)' : ''}</span>
                         <span className={rewardsInfo.activeTierLabel === 'Gold' ? "text-[#0F2D52] font-black" : ""}>Gold {rewardsInfo.activeTierLabel === 'Gold' ? '(Active)' : ''}</span>
-                        <span className={rewardsInfo.activeTierLabel === 'Platinum' ? "text-[#0F2D52] font-black" : ""}>Platinum {rewardsInfo.activeTierLabel === 'Platinum' ? '(Active)' : ''}</span>
                       </div>
                       
                       {/* Horizontal Progress Bar */}
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative border border-slate-200/20">
                         <div 
                           className={`h-full bg-gradient-to-r ${
-                            rewardsInfo.activeTierLabel === 'Platinum'
-                              ? 'from-indigo-500 via-purple-500 to-pink-500'
+                            rewardsInfo.activeTierLabel === 'LOCKED'
+                              ? 'from-slate-300 to-slate-300'
                               : rewardsInfo.activeTierLabel === 'Gold'
                               ? 'from-amber-500 via-yellow-400 to-amber-600 shadow-[0px_0px_6px_rgba(245,158,11,0.5)]'
-                              : 'from-slate-400 to-[#0F2D52]'
+                              : rewardsInfo.activeTierLabel === 'Silver'
+                              ? 'from-slate-400 to-[#0F2D52]'
+                              : 'from-orange-400 to-orange-600 shadow-[0px_0px_6px_rgba(234,88,12,0.4)]'
                           }`}
                           style={{ width: `${rewardsInfo.progressPercent}%` }} 
                         />
                       </div>
                       
                       <div className="flex justify-between items-center text-[10.5px] font-semibold text-slate-400">
-                        <span>Mata Ganjaran: {rewardsInfo.xp} XP</span>
-                        <span>Faedah: {rewardsInfo.benefitsCount}/20</span>
+                        <span>Reward Points: {rewardsInfo.xp} / 200 XP</span>
+                        <span>Benefits: {rewardsInfo.benefitsCount}/20</span>
                         <span>
-                          {rewardsInfo.xp >= 100 ? 'Platinum Tier Aktif' : `Next Tier: ${rewardsInfo.nextTierXP} XP`}
+                          {rewardsInfo.activeTierLabel === 'LOCKED'
+                            ? 'Compliance Required'
+                            : rewardsInfo.xp >= 200 
+                              ? 'Gold Tier Active' 
+                              : `Next Tier: ${rewardsInfo.nextTierXP} XP`}
                         </span>
                       </div>
                     </div>
@@ -5159,9 +5309,9 @@ function AppContent({
                         <Award className="w-4 h-4 text-[#0F2D52]" />
                       </div>
                       <div className="space-y-0.5">
-                        <span className="text-[11.5px] font-bold text-[#0F2D52] block">Kehadiran Acara</span>
+                        <span className="text-[11.5px] font-bold text-[#0F2D52] block">Event Attendance</span>
                         <span className="text-[11px] text-slate-500 font-semibold leading-normal block">
-                          3/5 Acara dihadiri tahun ini untuk tebus pelekat eksklusif!
+                          Attend 3/5 events this year to redeem an exclusive sticker!
                         </span>
                       </div>
                     </div>
@@ -5190,7 +5340,7 @@ function AppContent({
                   <div className="space-y-3.5 pt-2 text-left">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       <span className="w-1.5 h-4 bg-[#0F2D52] rounded-full" />
-                      Rakan Niaga Pilihan
+                      Featured Merchants
                     </h3>
                     
                     <div className="grid grid-cols-3 gap-3">
@@ -5202,7 +5352,7 @@ function AppContent({
                         <div className="mt-4.5 space-y-0.5">
                           <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Workshop</span>
                           <span className="text-[10px] text-slate-550 font-bold leading-tight block">
-                            Diskaun 10% di Bengkel X
+                            10% Discount at Workshop X
                           </span>
                         </div>
                       </div>
@@ -5215,7 +5365,7 @@ function AppContent({
                         <div className="mt-4.5 space-y-0.5">
                           <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Lifestyle</span>
                           <span className="text-[10px] text-slate-550 font-bold leading-tight block">
-                            Diskaun Ahli di Kafe Y
+                            Member Discount at Cafe Y
                           </span>
                         </div>
                       </div>
@@ -5228,7 +5378,7 @@ function AppContent({
                         <div className="mt-4.5 space-y-0.5">
                           <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Insurance</span>
                           <span className="text-[10px] text-slate-550 font-bold leading-tight block">
-                            Rebat Eksklusif Takaful
+                            Exclusive Insurance Rebates
                           </span>
                         </div>
                       </div>
@@ -5247,7 +5397,7 @@ function AppContent({
                   <div className="space-y-4 pt-3 border-t border-slate-100 text-left">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       <span className="w-1.5 h-4 bg-red-500 rounded-full" />
-                      Komuniti & Aktiviti
+                      Community & Activities
                     </h3>
 
                     {/* Notice Board Ticker */}
@@ -5259,7 +5409,7 @@ function AppContent({
                       <div className="flex-1 overflow-hidden h-5 relative">
                         {/* Smooth sliding announcement */}
                         <div className="absolute w-full text-xs text-slate-600 font-bold animate-marquee whitespace-nowrap">
-                          📣 Baju jersi edisi terhad MVOC kini dibuka untuk tempahan! Sila layari seksyen Pengumuman kelab atau hubungi AJK Chapter anda.
+                          📣 Limited edition MVOC jerseys are now open for pre-order! Please visit the Announcements section or contact your Chapter committee.
                         </div>
                       </div>
                     </div>
@@ -5275,7 +5425,7 @@ function AppContent({
                         </h4>
                         <div className="flex items-center gap-1.5 text-[10.5px] text-slate-500 font-semibold">
                           <Calendar className="w-3.5 h-3.5 text-[#0F2D52] shrink-0" />
-                          <span>Tarikh: 31 Ogos 2026</span>
+                          <span>Date: 31 August 2026</span>
                         </div>
                       </div>
                       
@@ -5286,7 +5436,7 @@ function AppContent({
                         }}
                         className="bg-[#0F2D52] hover:bg-[#0A223D] active:scale-95 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-sm cursor-pointer select-none whitespace-nowrap"
                       >
-                        RSVP Sini
+                        RSVP Here
                       </button>
                     </div>
                   </div>
