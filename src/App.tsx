@@ -1121,6 +1121,45 @@ function AppContent({
   
   const [isVehicleEditModalOpen, setIsVehicleEditModalOpen] = useState(false);
   const [isShareCardModalOpen, setIsShareCardModalOpen] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    const cardUrl = `https://mvoc.my/card/${displayMvocId}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cardUrl)
+        .then(() => {
+          setIsCopied(true);
+          triggerToast('Pautan kad keahlian disalin!', 'success');
+          setTimeout(() => setIsCopied(false), 2000);
+        })
+        .catch((err) => {
+          console.error("Failed to copy using clipboard API:", err);
+          fallbackCopyText(cardUrl);
+        });
+    } else {
+      fallbackCopyText(cardUrl);
+    }
+  };
+
+  const fallbackCopyText = (text: string) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setIsCopied(true);
+      triggerToast('Pautan kad keahlian disalin!', 'success');
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
+      triggerToast('Gagal menyalin pautan, sila salin secara manual.', 'error');
+    }
+  };
+
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({
@@ -4999,67 +5038,60 @@ function AppContent({
                             </div>
 
                             {/* Card Display Card Mini */}
-                            <div className="bg-[#112F56] p-4 rounded-2xl text-left border border-white/5 space-y-3">
-                              <div className="flex justify-between items-start">
+                            <div className="relative bg-gradient-to-br from-[#0a1b33] via-[#112F56] to-[#0a182a] p-4.5 rounded-2xl text-left border border-slate-700/40 shadow-xl overflow-hidden h-[120px] flex flex-col justify-between select-none">
+                              {/* Background pattern layer */}
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
+                              
+                              <div className="flex justify-between items-start z-10">
                                 <div>
-                                  <span className="text-[11.5px] font-black text-amber-500">MVOC</span>
-                                  <span className="text-[6.5px] font-black text-white/70 block uppercase tracking-wide">Malaysia Veloz Group</span>
+                                  <span className="text-[12px] font-black text-amber-500 tracking-wider">MVOC</span>
+                                  <span className="text-[7px] font-black text-white/70 block uppercase tracking-widest leading-none">Malaysia Veloz Group</span>
                                 </div>
-                                <span className="text-[8px] border border-amber-500/50 text-amber-500 px-1.5 py-0.2 rounded-md font-extrabold uppercase">{displayTier}</span>
+                                <span className="text-[8.5px] bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 text-white border border-amber-400/40 px-2 py-0.5 rounded-md font-black uppercase tracking-wider shadow-sm">
+                                  GOLD MEMBER
+                                </span>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg overflow-hidden border border-amber-400 p-0.5">
+                              
+                              <div className="flex items-center gap-3 mt-auto z-10">
+                                <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-amber-450 p-0.5 shrink-0 shadow-md">
                                   <img 
                                     src={displayAvatarUrl} 
                                     alt={displayName} 
                                     className="w-full h-full object-cover rounded-md"
                                   />
                                 </div>
-                                <div>
-                                  <p className="text-xs font-black text-white">{displayName}</p>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <p className="text-[9.5px] text-amber-400 font-mono font-bold leading-none">{displayMvocId}</p>
+                                <div className="min-w-0 pr-12">
+                                  <p className="text-xs font-black text-white tracking-tight leading-tight truncate">{displayName}</p>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <p className="text-[10px] text-amber-400 font-mono font-black leading-none tracking-wider">{displayMvocId}</p>
                                     {displayManagedChapter && (
-                                      <span className="bg-blue-900 border border-blue-500/50 text-white font-bold text-[8px] px-1.5 py-0.5 rounded-full uppercase tracking-wider block">
+                                      <span className="bg-blue-900 border border-blue-500/30 text-white font-bold text-[7px] px-1.5 py-0.5 rounded-full uppercase tracking-wider block leading-none">
                                         {displayManagedChapter}
                                       </span>
                                     )}
                                   </div>
                                 </div>
                               </div>
+
+                              {/* Integrasi Kod QR */}
+                              <div className="absolute bottom-3 right-3 bg-white p-1 rounded-lg shadow-md border border-slate-700/20 flex items-center justify-center z-10">
+                                <QRCodeSVG 
+                                  value={`https://mvoc.my/card/${displayMvocId}`} 
+                                  size={36} 
+                                  level="L" 
+                                  className="text-[#112F56]"
+                                />
+                              </div>
                             </div>
 
-                            {/* Sharing Actions Grid */}
-                            <div className="grid grid-cols-2 gap-2.5 pt-1">
+                            {/* Sharing Actions (WhatsApp removed, Copy Link expanded) */}
+                            <div className="pt-1">
                               <button 
-                                onClick={() => {
-                                  if (navigator.share) {
-                                    navigator.share({
-                                      title: 'Digital Membership MVOC Malaysia',
-                                      text: `Join the Veloz Malaysia owners community with ${displayName}!`,
-                                      url: `https://mvoc-pwa.my/card/${displayMvocId}`
-                                    }).catch(() => {});
-                                  } else {
-                                    navigator.clipboard.writeText(`https://mvoc-pwa.my/card/${displayMvocId}`);
-                                    triggerToast('Membership card link copied to clipboard!', 'success');
-                                  }
-                                  setIsShareCardModalOpen(false);
-                                }}
-                                className="flex items-center justify-center gap-2 bg-[#EAF2FC] hover:bg-[#D4E4F7] text-[#0F2D52] py-2.5 px-3 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer"
+                                onClick={handleCopyLink}
+                                className="w-full flex items-center justify-center gap-2 bg-[#EAF2FC] hover:bg-[#D4E4F7] text-[#0F2D52] py-3 px-4 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer shadow-2xs"
                               >
                                 <Link className="w-4 h-4 text-[#0F2D52]" />
-                                <span>Copy Link</span>
-                              </button>
-
-                              <button 
-                                onClick={() => {
-                                  triggerToast('Opening official WhatsApp share...', 'info');
-                                  window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(`MVOC Digital Member Card - ${displayName}: https://mvoc-pwa.my/card/${displayMvocId}`), '_blank');
-                                  setIsShareCardModalOpen(false);
-                                }}
-                                className="flex items-center justify-center gap-2 bg-[#E6F7ED] hover:bg-[#C9EFE0] text-emerald-800 py-2.5 px-3 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer"
-                              >
-                                <span>WhatsApp</span>
+                                <span>{isCopied ? "Pautan Disalin!" : "Copy Link"}</span>
                               </button>
                             </div>
 
