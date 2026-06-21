@@ -48,6 +48,12 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
   const [activeTab, setActiveTab] = useState<'all' | 'leaders'>('all');
 
   const [selectedChapter, setSelectedChapter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab, selectedChapter]);
 
   // Dynamically extract unique chapters present in the verified members list
   const uniqueChapters = Array.from(
@@ -144,6 +150,11 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
       mbr.mvocId.toLowerCase().includes(query)
     );
   });
+
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredMembers.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="space-y-6" id="member-directory-container">
@@ -242,7 +253,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
       ) : (
         <div className="flex flex-col gap-2">
           <AnimatePresence>
-            {filteredMembers.map((member) => (
+            {currentItems.map((member) => (
               <motion.div
                 key={member.uid}
                 layoutId={`member-row-${member.uid}`}
@@ -305,6 +316,69 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center gap-3 pt-4 pb-2 select-none" id="directory-pagination">
+              {/* Pagination Info */}
+              <div className="text-[11px] text-slate-400 font-semibold">
+                Showing <span className="text-emerald-400 font-bold">{indexOfFirstItem + 1}</span> to <span className="text-emerald-400 font-bold">{Math.min(indexOfLastItem, filteredMembers.length)}</span> of <span className="text-slate-200 font-bold">{filteredMembers.length}</span> members
+              </div>
+
+              {/* Pagination Navigation */}
+              <div className="flex items-center gap-2">
+                {/* Previous Button */}
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black transition-all bg-[#0b1c30] border border-slate-800 text-slate-350 hover:bg-[#16243a] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-[#0b1c30] disabled:hover:text-slate-350 cursor-pointer"
+                >
+                  Sebelumnya
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    const isFirstOrLast = page === 1 || page === totalPages;
+                    const isNearCurrent = Math.abs(page - currentPage) <= 1;
+
+                    if (!isFirstOrLast && !isNearCurrent) {
+                      if (page === 2 && currentPage > 3) {
+                        return <span key={page} className="text-slate-500 px-1 text-xs select-none">...</span>;
+                      }
+                      if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                        return <span key={page} className="text-slate-500 px-1 text-xs select-none">...</span>;
+                      }
+                      return null;
+                    }
+
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-black transition-all cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-[#0F2D52] text-emerald-400 border border-[#0F2D52] font-black shadow-xs'
+                            : 'bg-[#0b1c30] border border-slate-800 text-slate-400 hover:bg-[#16243a] hover:text-white'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black transition-all bg-[#0b1c30] border border-slate-800 text-slate-350 hover:bg-[#16243a] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-[#0b1c30] disabled:hover:text-slate-350 cursor-pointer"
+                >
+                  Seterusnya
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
