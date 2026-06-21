@@ -932,6 +932,54 @@ function AppContent({
     }
   };
 
+  const [isAuditingRewards, setIsAuditingRewards] = useState(false);
+
+  const handleRunRewardsAudit = async () => {
+    if (!window.confirm("Menjalankan audit pangkalan data untuk mengira semula mata ganjaran permulaan (30 XP / 0 XP) berdasarkan syarat baharu?")) {
+      return;
+    }
+
+    try {
+      setIsAuditingRewards(true);
+      const querySnapshot = await getDocsFromServer(collection(db, 'users'));
+      let updateCount = 0;
+      let compliantCount = 0;
+      let nonCompliantCount = 0;
+
+      for (const userDoc of querySnapshot.docs) {
+        const userData = userDoc.data() as SyncedUserProfile;
+        // Skip master admin
+        if (userData.email?.toLowerCase() === MASTER_EMAIL) {
+          continue;
+        }
+
+        const disclaimerAccepted = userData.disclaimerAccepted === true;
+        const pdpaAccepted = userData.pdpaAccepted === true;
+        const hasPatch = userData.patch_status === true || userData.officialPatch === true || userData.patch === 'mvoc_trusted_elite';
+
+        const meetsCompliance = disclaimerAccepted && pdpaAccepted && hasPatch;
+        const targetPoints = meetsCompliance ? Math.max(userData.points || 0, 30) : 0;
+
+        if (userData.points !== targetPoints) {
+          await updateDoc(doc(db, 'users', userDoc.id), { points: targetPoints });
+          updateCount++;
+          if (meetsCompliance) {
+            compliantCount++;
+          } else {
+            nonCompliantCount++;
+          }
+        }
+      }
+
+      triggerToast(`Audit selesai! Mengemaskini ${updateCount} pengguna (${compliantCount} layak 30 XP, ${nonCompliantCount} reset ke 0 XP).`, 'success');
+      await fetchFirestoreUsers();
+    } catch (e: any) {
+      triggerToast(`Audit gagal: ${e.message || String(e)}`, 'error');
+    } finally {
+      setIsAuditingRewards(false);
+    }
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   
   // Google Auth Popup Blocked State
@@ -1505,18 +1553,15 @@ function AppContent({
 
   // Admin-only module management states (Events & Gallery)
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
-  const [isConsented, setIsConsented] = useState(false);
+  const [isDisclaimerChecked, setIsDisclaimerChecked] = useState(false);
+  const [isPdpaChecked, setIsPdpaChecked] = useState(false);
   const [isSavingConsent, setIsSavingConsent] = useState(false);
 
-  // Sync isConsented checkbox state with database userProfile when loaded/synced
+  // Sync isConsented checkbox states with database userProfile when loaded/synced
   useEffect(() => {
     if (userProfile) {
-      if (userProfile.isVerified === true || userProfile.patch === 'mvoc_trusted_elite') {
-        setIsConsented(true);
-        if (auth.currentUser) {
-          localStorage.setItem(`mvoc_consented_${auth.currentUser.uid}`, 'true');
-        }
-      }
+      setIsDisclaimerChecked(userProfile.disclaimerAccepted === true);
+      setIsPdpaChecked(userProfile.pdpaAccepted === true);
     }
   }, [userProfile]);
 
@@ -1526,8 +1571,13 @@ function AppContent({
       return;
     }
     
-    if (!isConsented) {
-      triggerToast("Sila tanda kotak persetujuan jika anda bersetuju dengan Syarat & Notis Privasi.", "error");
+    if (!isDisclaimerChecked) {
+      triggerToast("Sila tanda kotak persetujuan Terma & Syarat / DISCLAIMER.", "error");
+      return;
+    }
+
+    if (!isPdpaChecked) {
+      triggerToast("Sila tanda kotak persetujuan Notis Privasi (PDPA).", "error");
       return;
     }
 
@@ -1535,25 +1585,34 @@ function AppContent({
       setIsSavingConsent(true);
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userDocRef, {
+        disclaimerAccepted: true,
+        pdpaAccepted: true,
         isVerified: true,
-        patch: 'mvoc_trusted_elite'
+        patch: 'mvoc_trusted_elite',
+        points: 30
       });
       
       // Synchronously update local profile structure
       updateLocalProfileState({
+        disclaimerAccepted: true,
+        pdpaAccepted: true,
         isVerified: true,
-        patch: 'mvoc_trusted_elite'
+        patch: 'mvoc_trusted_elite',
+        points: 30
       });
 
       localStorage.setItem(`mvoc_consented_${auth.currentUser.uid}`, 'true');
 
-      triggerToast("Terima kasih! Persetujuan anda telah berjaya disimpan dan lencana Trusted Elite telah dianugerahkan.", "success");
+      triggerToast("Terima kasih! Persetujuan anda disimpan dan lencana Trusted Elite serta 30 XP telah dianugerahkan.", "success");
     } catch (err: any) {
       console.warn("Gagal menyimpan persetujuan:", err);
       // Sandbox fallback
       updateLocalProfileState({
+        disclaimerAccepted: true,
+        pdpaAccepted: true,
         isVerified: true,
-        patch: 'mvoc_trusted_elite'
+        patch: 'mvoc_trusted_elite',
+        points: 30
       });
       if (auth.currentUser) {
         localStorage.setItem(`mvoc_consented_${auth.currentUser.uid}`, 'true');
@@ -2537,6 +2596,52 @@ function AppContent({
       photoURL: safeAvatarUrl
     });
   }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl]);
+
+  const rewardsInfo = useMemo(() => {
+    const xp = userProfile?.points !== undefined ? userProfile.points : 0;
+    
+    // Determine active tier based on XP
+    let activeTierLabel: 'Silver' | 'Gold' | 'Platinum' = 'Silver';
+    let currentTierName = 'Silver Member';
+    
+    if (xp >= 100) {
+      activeTierLabel = 'Platinum';
+      currentTierName = 'Platinum Member';
+    } else if (xp >= 30) {
+      activeTierLabel = 'Gold';
+      currentTierName = 'Gold Member';
+    }
+    
+    // Calculate progress percentage and next tier goals
+    let progressPercent = 0;
+    let nextTierXP = 30;
+    let benefitsCount = 5;
+    
+    if (xp >= 100) {
+      progressPercent = 100;
+      nextTierXP = 100;
+      benefitsCount = 20;
+    } else if (xp >= 30) {
+      // Progress between Gold (30) and Platinum (100)
+      progressPercent = Math.min(Math.round(((xp - 30) / 70) * 100), 100);
+      nextTierXP = 100;
+      benefitsCount = 12;
+    } else {
+      // Progress between Silver (0) and Gold (30)
+      progressPercent = Math.min(Math.round((xp / 30) * 100), 100);
+      nextTierXP = 30;
+      benefitsCount = 5;
+    }
+    
+    return {
+      xp,
+      activeTierLabel,
+      currentTierName,
+      progressPercent,
+      nextTierXP,
+      benefitsCount
+    };
+  }, [userProfile?.points]);
 
   if (isAuthLoading) {
     return (
@@ -4982,30 +5087,44 @@ function AppContent({
                   <div className="bg-white p-5 rounded-3xl border border-slate-200/50 shadow-xs text-left space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-black text-[#0F2D52] uppercase tracking-wider">Veloz Tier & Rewards</span>
-                      <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full uppercase">
-                        Gold Member
+                      <span className={`text-[10px] font-bold border px-2.5 py-0.5 rounded-full uppercase ${
+                        rewardsInfo.activeTierLabel === 'Platinum' 
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm shadow-indigo-100/50'
+                          : rewardsInfo.activeTierLabel === 'Gold'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm shadow-amber-100/50'
+                          : 'bg-slate-50 text-slate-650 border-slate-200'
+                      }`}>
+                        {rewardsInfo.currentTierName}
                       </span>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                        <span>Silver</span>
-                        <span className="text-[#0F2D52]">Gold (Active)</span>
-                        <span>Platinum</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Silver' ? "text-[#0F2D52] font-black" : ""}>Silver {rewardsInfo.activeTierLabel === 'Silver' ? '(Active)' : ''}</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Gold' ? "text-[#0F2D52] font-black" : ""}>Gold {rewardsInfo.activeTierLabel === 'Gold' ? '(Active)' : ''}</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Platinum' ? "text-[#0F2D52] font-black" : ""}>Platinum {rewardsInfo.activeTierLabel === 'Platinum' ? '(Active)' : ''}</span>
                       </div>
                       
                       {/* Horizontal Progress Bar */}
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative border border-slate-200/20">
                         <div 
-                          className="h-full bg-gradient-to-r from-slate-400 via-[#0F2D52] to-[#DC2626]" 
-                          style={{ width: '65%' }} 
+                          className={`h-full bg-gradient-to-r ${
+                            rewardsInfo.activeTierLabel === 'Platinum'
+                              ? 'from-indigo-500 via-purple-500 to-pink-500'
+                              : rewardsInfo.activeTierLabel === 'Gold'
+                              ? 'from-amber-500 via-yellow-400 to-amber-600 shadow-[0px_0px_6px_rgba(245,158,11,0.5)]'
+                              : 'from-slate-400 to-[#0F2D52]'
+                          }`}
+                          style={{ width: `${rewardsInfo.progressPercent}%` }} 
                         />
                       </div>
                       
                       <div className="flex justify-between items-center text-[10.5px] font-semibold text-slate-400">
-                        <span>Join Club</span>
-                        <span>Benefits Unlocked: 12/20</span>
-                        <span>Next Tier: 1500 XP</span>
+                        <span>Mata Ganjaran: {rewardsInfo.xp} XP</span>
+                        <span>Faedah: {rewardsInfo.benefitsCount}/20</span>
+                        <span>
+                          {rewardsInfo.xp >= 100 ? 'Platinum Tier Aktif' : `Next Tier: ${rewardsInfo.nextTierXP} XP`}
+                        </span>
                       </div>
                     </div>
 
@@ -7482,6 +7601,8 @@ function AppContent({
                   handleUpdateMemberTier={handleUpdateMemberTier}
                   handleUpdateMemberStatus={handleUpdateMemberStatus}
                   handleUpdateMemberPatch={handleUpdateMemberPatch}
+                  handleRunRewardsAudit={handleRunRewardsAudit}
+                  isAuditingRewards={isAuditingRewards}
                   displayAvatarUrl={displayAvatarUrl}
                   displayEmail={displayEmail}
                   triggerToast={triggerToast}
@@ -8847,42 +8968,69 @@ function AppContent({
                   DISCLAIMER & NOTIS PRIVASI
                 </button>
 
-                {/* Kotak Persetujuan Syarat & Privasi interaktif (Hanya muncul jika belum bersetuju) */}
-                {!(userProfile?.isVerified === true || userProfile?.patch === 'mvoc_trusted_elite' || (auth.currentUser && localStorage.getItem(`mvoc_consented_${auth.currentUser.uid}`) === 'true')) && (
-                  <div className="mt-4 p-3 bg-[#081525] border border-white/5 rounded-xl text-left transition-all">
-                    <div className="flex items-center gap-1.5 mb-1.5 text-amber-500">
-                      <Shield className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-[9px] font-black uppercase tracking-wider">Persetujuan Ahli</span>
-                    </div>
+                {/* Kotak Persetujuan Syarat & Privasi interaktif (Hanya muncul jika belum memenuhi syarat ganjaran) */}
+                 {!(userProfile?.disclaimerAccepted === true && userProfile?.pdpaAccepted === true && (userProfile?.patch_status === true || userProfile?.officialPatch === true || userProfile?.patch === 'mvoc_trusted_elite')) && (
+                   <div className="mt-4 p-3 bg-[#081525] border border-white/5 rounded-xl text-left transition-all space-y-3">
+                     <div className="flex items-center gap-1.5 mb-1 text-amber-500">
+                       <Shield className="w-3.5 h-3.5 text-amber-500" />
+                       <span className="text-[9px] font-black uppercase tracking-wider">Kelayakan Mata Ganjaran (XP)</span>
+                     </div>
+                     <p className="text-[9px] text-slate-400 leading-normal font-semibold">
+                       Sila tanda raji persetujuan di bawah untuk melayakkan anda menerima 30 XP permulaan:
+                     </p>
 
-                    <label className="flex items-start gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={isConsented}
-                        onChange={(e) => setIsConsented(e.target.checked)}
-                        className="mt-0.5 rounded border-white/10 text-emerald-500 focus:ring-emerald-500 bg-[#06111e] w-3.5 h-3.5 shrink-0 accent-emerald-500"
-                      />
-                      <span className="text-[10px] text-slate-400 font-medium leading-tight select-none">
-                        Saya telah membaca dan bersetuju dengan Syarat & Notis Privasi MVOC
-                      </span>
-                    </label>
+                     <label className="flex items-start gap-2 cursor-pointer select-none">
+                       <input
+                         type="checkbox"
+                         checked={isDisclaimerChecked}
+                         onChange={(e) => setIsDisclaimerChecked(e.target.checked)}
+                         className="mt-0.5 rounded border-white/10 text-emerald-500 focus:ring-emerald-500 bg-[#06111e] w-3.5 h-3.5 shrink-0 accent-emerald-500"
+                       />
+                       <span className="text-[10px] text-slate-350 font-medium leading-tight select-none">
+                         Saya bersetuju dengan <strong>Terma & Syarat / DISCLAIMER</strong>.
+                       </span>
+                     </label>
 
-                    <div className="mt-3.5">
-                      <button
-                        onClick={handleSaveConsent}
-                        disabled={isSavingConsent}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold text-[10px] rounded-lg tracking-wider uppercase transition cursor-pointer select-none active:scale-95 flex items-center justify-center gap-1"
-                      >
-                        {isSavingConsent ? (
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Check className="w-3 h-3" />
-                        )}
-                        <span>SIMPAN KEPUTUSAN</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+                     <label className="flex items-start gap-2 cursor-pointer select-none">
+                       <input
+                         type="checkbox"
+                         checked={isPdpaChecked}
+                         onChange={(e) => setIsPdpaChecked(e.target.checked)}
+                         className="mt-0.5 rounded border-white/10 text-emerald-500 focus:ring-emerald-500 bg-[#06111e] w-3.5 h-3.5 shrink-0 accent-emerald-500"
+                       />
+                       <span className="text-[10px] text-slate-350 font-medium leading-tight select-none">
+                         Saya bersetuju dengan <strong>Notis Privasi (PDPA)</strong>.
+                       </span>
+                     </label>
+
+                     {/* Status Trusted Elite Patch Indicator */}
+                     <div className="flex items-center gap-2 pt-1">
+                       <div className={`w-2 h-2 rounded-full ${(userProfile?.patch_status === true || userProfile?.officialPatch === true || userProfile?.patch === 'mvoc_trusted_elite') ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`} />
+                       <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">
+                         Lencana Trusted Elite: {(userProfile?.patch_status === true || userProfile?.officialPatch === true || userProfile?.patch === 'mvoc_trusted_elite') ? (
+                           <span className="text-emerald-400">AKTIF</span>
+                         ) : (
+                           <span className="text-rose-400">BELUM AKTIF</span>
+                         )}
+                       </span>
+                     </div>
+
+                     <div className="mt-3.5">
+                       <button
+                         onClick={handleSaveConsent}
+                         disabled={isSavingConsent}
+                         className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold text-[10px] rounded-lg tracking-wider uppercase transition cursor-pointer select-none active:scale-95 flex items-center justify-center gap-1"
+                       >
+                         {isSavingConsent ? (
+                           <RefreshCw className="w-3 h-3 animate-spin" />
+                         ) : (
+                           <Check className="w-3 h-3" />
+                         )}
+                         <span>SIMPAN KEPUTUSAN</span>
+                       </button>
+                     </div>
+                   </div>
+                 )}
               </div>
 
             </motion.div>

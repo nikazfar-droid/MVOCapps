@@ -78,6 +78,8 @@ export interface SyncedUserProfile {
   patch?: string;
   requestDelete?: boolean;
   deleteRequestedAt?: string;
+  disclaimerAccepted?: boolean;
+  pdpaAccepted?: boolean;
 }
 
 export function formatMvocId(input: string): string {
@@ -300,10 +302,24 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
   if (existingProfile.status !== undefined) {
     finalProfile.status = existingProfile.status;
   }
-  if (existingProfile.points !== undefined) {
-    finalProfile.points = existingProfile.points;
+  if (existingProfile.disclaimerAccepted !== undefined) {
+    finalProfile.disclaimerAccepted = existingProfile.disclaimerAccepted;
   } else {
-    finalProfile.points = 30;
+    finalProfile.disclaimerAccepted = false;
+  }
+  if (existingProfile.pdpaAccepted !== undefined) {
+    finalProfile.pdpaAccepted = existingProfile.pdpaAccepted;
+  } else {
+    finalProfile.pdpaAccepted = false;
+  }
+
+  const hasPatch = finalProfile.patch_status === true || finalProfile.officialPatch === true || finalProfile.patch === 'mvoc_trusted_elite';
+  const meetsCompliance = finalProfile.disclaimerAccepted === true && finalProfile.pdpaAccepted === true && hasPatch;
+
+  if (existingProfile.points !== undefined) {
+    finalProfile.points = meetsCompliance ? Math.max(existingProfile.points || 0, 30) : 0;
+  } else {
+    finalProfile.points = meetsCompliance ? 30 : 0;
   }
   if (existingProfile.joinDate !== undefined) {
     finalProfile.joinDate = existingProfile.joinDate;
@@ -340,6 +356,12 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
   }
   if (existingProfile.managedChapter !== undefined) {
     finalProfile.managedChapter = existingProfile.managedChapter;
+  }
+  if (existingProfile.disclaimerAccepted !== undefined) {
+    finalProfile.disclaimerAccepted = existingProfile.disclaimerAccepted;
+  }
+  if (existingProfile.pdpaAccepted !== undefined) {
+    finalProfile.pdpaAccepted = existingProfile.pdpaAccepted;
   }
 
   // Write finalized profile records to Firestore

@@ -45,6 +45,8 @@ interface AdminDashboardProps {
   handleUpdateMemberTier: (targetUser: SyncedUserProfile, newTier: 'GOLD' | 'STANDARD') => Promise<void>;
   handleUpdateMemberStatus?: (targetUser: SyncedUserProfile, newStatus: 'active' | 'suspended' | 'banned') => Promise<void>;
   handleUpdateMemberPatch?: (targetUser: SyncedUserProfile, officialPatch: boolean) => Promise<void>;
+  handleRunRewardsAudit?: () => Promise<void>;
+  isAuditingRewards?: boolean;
   displayAvatarUrl: string;
   displayEmail: string;
   triggerToast: (msg: string, type: 'info' | 'success' | 'error') => void;
@@ -67,6 +69,8 @@ export default function AdminDashboard({
   handleUpdateMemberTier,
   handleUpdateMemberStatus,
   handleUpdateMemberPatch,
+  handleRunRewardsAudit,
+  isAuditingRewards = false,
   displayEmail,
   triggerToast,
   currentUserRole = 'member',
@@ -797,6 +801,23 @@ export default function AdminDashboard({
             <ExternalLink className="w-4 h-4" />
             <span>Google Sheet</span>
           </a>
+
+          {handleRunRewardsAudit && (
+            <button
+              type="button"
+              onClick={handleRunRewardsAudit}
+              disabled={isAuditingRewards}
+              className="relative z-[9999] pointer-events-auto bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              style={{ cursor: 'pointer' }}
+            >
+              {isAuditingRewards ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-4 h-4" />
+              )}
+              <span>Audit Rewards (XP)</span>
+            </button>
+          )}
         </div>
       </section>
 
