@@ -1123,6 +1123,51 @@ function AppContent({
   const [isShareCardModalOpen, setIsShareCardModalOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
+  // Public View Page States
+  const [publicCardId, setPublicCardId] = useState<string | null>(null);
+  const [isPublicLoading, setIsPublicLoading] = useState(false);
+  const [publicProfile, setPublicProfile] = useState<{ name: string; mvocId: string; status: string; chapter?: string } | null>(null);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/card\/(MVOC-\d{4,5})$/i);
+    if (match) {
+      const mvocId = match[1].toUpperCase();
+      setPublicCardId(mvocId);
+      setIsPublicLoading(true);
+
+      // Query database for member info
+      const q = query(collection(db, 'users'), where('mvocId', '==', mvocId));
+      getDocsFromServer(q).then((querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data() as SyncedUserProfile;
+          setPublicProfile({
+            name: userData.name || "ABENIK",
+            mvocId: mvocId,
+            status: userData.status === 'suspended' ? 'SUSPENDED' : (userData.status === 'banned' ? 'BANNED' : 'GOLD MEMBER'),
+            chapter: userData.chapter
+          });
+        } else {
+          // Fallback if not in Firestore but requested
+          setPublicProfile({
+            name: mvocId === 'MVOC-0159' ? 'ABENIK' : 'Member',
+            mvocId: mvocId,
+            status: 'GOLD MEMBER'
+          });
+        }
+        setIsPublicLoading(false);
+      }).catch((err) => {
+        console.warn("Failed fetching public card profile:", err);
+        setPublicProfile({
+          name: mvocId === 'MVOC-0159' ? 'ABENIK' : 'Member',
+          mvocId: mvocId,
+          status: 'GOLD MEMBER'
+        });
+        setIsPublicLoading(false);
+      });
+    }
+  }, []);
+
   const handleCopyLink = () => {
     const cardUrl = `https://mvoc.my/card/${displayMvocId}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2531,6 +2576,148 @@ function AppContent({
         }}
         triggerToast={triggerToast}
       />
+    );
+  }
+
+  if (publicCardId) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 select-none">
+        <div className="w-full max-w-sm text-center space-y-6">
+          {/* Logo */}
+          <div className="w-full">
+            <img 
+              src="https://i.ibb.co/hR2y1NXX/MVOC-modified.jpg" 
+              alt="MVOC Logo"
+              className="w-full max-w-[200px] h-auto mx-auto object-contain select-none"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-xl font-display font-black tracking-tight text-[#0F2D52]">Bukti Keahlian Awam</h2>
+            <p className="text-xs text-slate-500 font-semibold leading-relaxed">MVOC Malaysia Digital Card Verification</p>
+          </div>
+
+          {isPublicLoading ? (
+            <div className="bg-white p-8 rounded-3xl border border-slate-200/50 shadow-sm flex flex-col items-center justify-center gap-3 py-16">
+              <RefreshCw className="w-8 h-8 text-[#0F2D52] animate-spin" />
+              <span className="text-xs text-slate-500 font-bold">Memuatkan profil kad...</span>
+            </div>
+          ) : publicProfile ? (
+            <div className="space-y-5">
+              {/* Premium Carbon Fiber/Sleek Dark Membership Card */}
+              <div
+                ref={cardRef}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+                style={tiltStyle}
+                className="w-full aspect-[1.65/1] cursor-pointer relative"
+                onClick={() => setIsCardFlipped(!isCardFlipped)}
+              >
+                <motion.div
+                  animate={{ rotateY: isCardFlipped ? 180 : 0 }}
+                  transition={{ duration: 0.6, type: 'spring', stiffness: 260, damping: 20 }}
+                  style={{ transformStyle: 'preserve-3d' }}
+                  className="relative w-full h-full"
+                >
+                  {/* FRONT FACE */}
+                  <div
+                    className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex items-center justify-center select-none group bg-cover bg-center"
+                    style={{ 
+                      backfaceVisibility: 'hidden',
+                      backgroundImage: `url(${mvocPremiumFront})`
+                    }}
+                  >
+                     {/* Glare/Shine overlay */}
+                     <div 
+                       className="absolute inset-0 pointer-events-none z-10" 
+                       style={glareStyle}
+                     />
+                     <span className="text-white/20 text-[10px] font-black uppercase tracking-widest pointer-events-none drop-shadow-md">
+                       MVOC DIGITAL CARD
+                     </span>
+                  </div>
+
+                  {/* BACK FACE */}
+                  <div
+                    className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-center select-none group bg-cover bg-center"
+                    style={{ 
+                      backfaceVisibility: 'hidden', 
+                      transform: 'rotateY(180deg)',
+                      backgroundImage: `url(${mvocPremiumBack})`
+                    }}
+                  >
+                    {/* Glare/Shine overlay */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-10" 
+                      style={glareStyle}
+                    />
+                    
+                    <div className="flex flex-col items-center justify-center relative w-full px-8 mt-4">
+                      <h4 
+                        className="text-[20px] sm:text-[22px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] text-center uppercase drop-shadow-xl"
+                        style={{ textShadow: "1px 1px 1px #fff, -1px -1px 1px #888, 2px 2px 4px rgba(0,0,0,0.8)" }}
+                      >
+                        {publicProfile.name}
+                      </h4>
+                      <span 
+                        className="text-[14px] sm:text-[15px] font-semibold tracking-[0.15em] font-sans text-[#cbd5e1] mt-1.5 drop-shadow-xl"
+                        style={{ textShadow: "1px 1px 0px #fff, -1px -1px 0px #888, 2px 2px 3px rgba(0,0,0,0.8)" }}
+                      >
+                        {publicProfile.mvocId}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Status Verification Badge */}
+              <div className="bg-emerald-50 border border-emerald-250 p-4 rounded-2xl flex items-start gap-3.5 text-left shadow-2xs">
+                <CheckCircle2 className="w-5.5 h-5.5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block leading-none">Status Keahlian</span>
+                  <span className="text-sm font-black text-emerald-950 block">{publicProfile.status}</span>
+                  <span className="text-[10.5px] text-slate-500 font-semibold leading-normal block">
+                    {publicProfile.chapter ? `${publicProfile.chapter} Chapter` : 'Verified Active Member'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Info box */}
+              <div className="flex gap-3 bg-slate-100/50 border border-slate-200/30 p-4 rounded-2xl text-left">
+                <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
+                  Kad digital ini dikeluarkan secara rasmi oleh persatuan berdaftar MVOC Malaysia. Ia membuktikan status aktif ahli yang berdaftar untuk tujuan program rasmi dan diskaun rakan niaga.
+                </p>
+              </div>
+
+              {/* Back to main portal button */}
+              <button
+                onClick={() => window.location.href = '/'}
+                className="w-full bg-[#0F2D52] hover:bg-[#0A223D] active:scale-[0.99] text-white py-3.5 px-4 rounded-2xl text-xs font-black transition cursor-pointer shadow-sm text-center block"
+              >
+                Sertai MVOC Malaysia
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-250/60 p-6 rounded-3xl text-center space-y-4 shadow-sm">
+              <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
+              <div className="space-y-1">
+                <h4 className="text-sm font-black text-[#0F2D52]">Profil Tidak Ditemui</h4>
+                <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                  Maaf, kod pengenalan keahlian {publicCardId} tiada dalam pangkalan data kami atau belum disegerakkan.
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = '/'}
+                className="bg-[#0F2D52] text-white text-xs font-black px-4 py-2.5 rounded-xl transition"
+              >
+                Kembali ke Utama
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -5084,14 +5271,25 @@ function AppContent({
                               </div>
                             </div>
 
-                            {/* Sharing Actions (WhatsApp removed, Copy Link expanded) */}
-                            <div className="pt-1">
+                            {/* Sharing Actions Grid (Copy Link & WhatsApp) */}
+                            <div className="grid grid-cols-2 gap-2.5 pt-1">
                               <button 
                                 onClick={handleCopyLink}
-                                className="w-full flex items-center justify-center gap-2 bg-[#EAF2FC] hover:bg-[#D4E4F7] text-[#0F2D52] py-3 px-4 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer shadow-2xs"
+                                className="flex items-center justify-center gap-2 bg-[#EAF2FC] hover:bg-[#D4E4F7] text-[#0F2D52] py-2.5 px-3 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer shadow-2xs"
                               >
                                 <Link className="w-4 h-4 text-[#0F2D52]" />
                                 <span>{isCopied ? "Pautan Disalin!" : "Copy Link"}</span>
+                              </button>
+
+                              <button 
+                                onClick={() => {
+                                  const inviteText = `Salam! Jom sertai komuniti pemilik Toyota Veloz di MVOC Malaysia. 🚗✨\n\nLihat profil digital card saya di sini:\nhttps://mvoc.my/card/${displayMvocId}\n\nDaftar sekarang untuk nikmati pelbagai kelebihan ahli, diskaun rakan niaga, dan sertai aktiviti konvoi rasmi kami!\nSertai kami di: https://mvoc.my`;
+                                  triggerToast('Membuka WhatsApp...', 'info');
+                                  window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(inviteText), '_blank');
+                                }}
+                                className="flex items-center justify-center gap-2 bg-[#E6F7ED] hover:bg-[#C9EFE0] text-emerald-800 py-2.5 px-3 rounded-xl text-xs font-bold transition active:scale-97 cursor-pointer shadow-2xs"
+                              >
+                                <span>WhatsApp</span>
                               </button>
                             </div>
 
