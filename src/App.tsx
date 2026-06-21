@@ -4675,10 +4675,10 @@ function AppContent({
                     >
                       {/* FRONT FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-800/80 flex items-center justify-center select-none group bg-cover bg-center"
+                        className="absolute inset-0 w-full h-full bg-[#000000] rounded-3xl overflow-hidden shadow-2xl border border-neutral-900 flex items-center justify-center select-none group"
                         style={{ 
                           backfaceVisibility: 'hidden',
-                          backgroundImage: `url(${mvocPremiumFront})`
+                          backgroundColor: '#000000'
                         }}
                       >
                          {/* Glare/Shine overlay */}
@@ -4695,11 +4695,11 @@ function AppContent({
 
                       {/* BACK FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-800/80 flex select-none group bg-cover bg-center"
+                        className="absolute inset-0 w-full h-full bg-[#000000] rounded-3xl overflow-hidden shadow-2xl border border-neutral-900 flex select-none group"
                         style={{ 
                           backfaceVisibility: 'hidden', 
                           transform: 'rotateY(180deg)',
-                          backgroundImage: `url(${mvocPremiumBack})`
+                          backgroundColor: '#000000'
                         }}
                       >
                         {/* Glare/Shine overlay */}
