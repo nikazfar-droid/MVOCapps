@@ -4684,7 +4684,7 @@ function AppContent({
 
                       {/* BACK FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-between p-4 select-none group bg-cover bg-center"
+                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-center select-none group bg-cover bg-center"
                         style={{ 
                           backfaceVisibility: 'hidden', 
                           transform: 'rotateY(180deg)',
@@ -4697,68 +4697,19 @@ function AppContent({
                           style={glareStyle}
                         />
                         
-                        {/* Top: Name & ID */}
-                        <div className="text-center w-full mt-2">
+                        <div className="flex flex-col items-center justify-center relative w-full px-8 mt-4">
                           <h4 
-                            className="text-[16px] sm:text-[18px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] uppercase drop-shadow-xl"
+                            className="text-[20px] sm:text-[22px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] text-center uppercase drop-shadow-xl"
                             style={{ textShadow: "1px 1px 1px #fff, -1px -1px 1px #888, 2px 2px 4px rgba(0,0,0,0.8)" }}
                           >
                             {displayName}
                           </h4>
                           <span 
-                            className="text-[12px] font-semibold tracking-[0.12em] font-sans text-[#cbd5e1] mt-0.5 block"
+                            className="text-[14px] sm:text-[15px] font-semibold tracking-[0.15em] font-sans text-[#cbd5e1] mt-1.5 drop-shadow-xl"
                             style={{ textShadow: "1px 1px 0px #fff, -1px -1px 0px #888, 2px 2px 3px rgba(0,0,0,0.8)" }}
                           >
                             {displayMvocId}
                           </span>
-                        </div>
-
-                        {/* Center: QRCodeSVG */}
-                        <div className="bg-white p-2.5 rounded-2xl shadow-lg border border-slate-800/10 flex items-center justify-center -mt-1 hover:scale-105 transition-transform duration-300">
-                          <QRCodeSVG 
-                            value={displayMvocId} 
-                            size={72} 
-                            level="H" 
-                            className="text-[#111]"
-                          />
-                        </div>
-
-                        {/* Bottom: Expiry & Social Links */}
-                        <div className="w-full flex items-center justify-between px-4 mb-2">
-                          <span className="text-[10px] font-black tracking-widest text-[#cbd5e1] uppercase">
-                            EXPIRES: 31/12/2026
-                          </span>
-                          
-                          {/* Social media icons */}
-                          <div className="flex items-center gap-3">
-                            <a 
-                              href="https://facebook.com/mvoc" 
-                              target="_blank" 
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-slate-400 hover:text-white transition active:scale-90"
-                            >
-                              <Facebook className="w-4 h-4" />
-                            </a>
-                            <a 
-                              href="https://instagram.com/mvoc" 
-                              target="_blank" 
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-slate-400 hover:text-white transition active:scale-90"
-                            >
-                              <Instagram className="w-4 h-4" />
-                            </a>
-                            <a 
-                              href="https://mvoc.my" 
-                              target="_blank" 
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-slate-400 hover:text-white transition active:scale-90"
-                            >
-                              <Globe className="w-4 h-4" />
-                            </a>
-                          </div>
                         </div>
                       </div>
                     </motion.div>
