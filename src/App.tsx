@@ -68,7 +68,10 @@ import {
   Award,
   ShieldAlert,
   Trash2,
-  UserCog
+  UserCog,
+  Facebook,
+  Instagram,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import StateChapters from './components/StateChapters';
@@ -4681,7 +4684,7 @@ function AppContent({
 
                       {/* BACK FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-center select-none group bg-cover bg-center"
+                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-between p-4 select-none group bg-cover bg-center"
                         style={{ 
                           backfaceVisibility: 'hidden', 
                           transform: 'rotateY(180deg)',
@@ -4694,19 +4697,68 @@ function AppContent({
                           style={glareStyle}
                         />
                         
-                        <div className="flex flex-col items-center justify-center relative w-full px-8 mt-4">
+                        {/* Top: Name & ID */}
+                        <div className="text-center w-full mt-2">
                           <h4 
-                            className="text-[20px] sm:text-[22px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] text-center uppercase drop-shadow-xl"
+                            className="text-[16px] sm:text-[18px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] uppercase drop-shadow-xl"
                             style={{ textShadow: "1px 1px 1px #fff, -1px -1px 1px #888, 2px 2px 4px rgba(0,0,0,0.8)" }}
                           >
                             {displayName}
                           </h4>
                           <span 
-                            className="text-[14px] sm:text-[15px] font-semibold tracking-[0.15em] font-sans text-[#cbd5e1] mt-1.5 drop-shadow-xl"
+                            className="text-[12px] font-semibold tracking-[0.12em] font-sans text-[#cbd5e1] mt-0.5 block"
                             style={{ textShadow: "1px 1px 0px #fff, -1px -1px 0px #888, 2px 2px 3px rgba(0,0,0,0.8)" }}
                           >
                             {displayMvocId}
                           </span>
+                        </div>
+
+                        {/* Center: QRCodeSVG */}
+                        <div className="bg-white p-2.5 rounded-2xl shadow-lg border border-slate-800/10 flex items-center justify-center -mt-1 hover:scale-105 transition-transform duration-300">
+                          <QRCodeSVG 
+                            value={displayMvocId} 
+                            size={72} 
+                            level="H" 
+                            className="text-[#111]"
+                          />
+                        </div>
+
+                        {/* Bottom: Expiry & Social Links */}
+                        <div className="w-full flex items-center justify-between px-4 mb-2">
+                          <span className="text-[10px] font-black tracking-widest text-[#cbd5e1] uppercase">
+                            EXPIRES: 31/12/2026
+                          </span>
+                          
+                          {/* Social media icons */}
+                          <div className="flex items-center gap-3">
+                            <a 
+                              href="https://facebook.com/mvoc" 
+                              target="_blank" 
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-slate-400 hover:text-white transition active:scale-90"
+                            >
+                              <Facebook className="w-4 h-4" />
+                            </a>
+                            <a 
+                              href="https://instagram.com/mvoc" 
+                              target="_blank" 
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-slate-400 hover:text-white transition active:scale-90"
+                            >
+                              <Instagram className="w-4 h-4" />
+                            </a>
+                            <a 
+                              href="https://mvoc.my" 
+                              target="_blank" 
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-slate-400 hover:text-white transition active:scale-90"
+                            >
+                              <Globe className="w-4 h-4" />
+                            </a>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -4749,6 +4801,50 @@ function AppContent({
                     </button>
                   </div>
 
+                  {/* Veloz Tier & Rewards (Gamification) */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200/50 shadow-xs text-left space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-black text-[#0F2D52] uppercase tracking-wider">Veloz Tier & Rewards</span>
+                      <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full uppercase">
+                        Gold Member
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[11px] font-bold text-slate-500">
+                        <span>Silver</span>
+                        <span className="text-[#0F2D52]">Gold (Active)</span>
+                        <span>Platinum</span>
+                      </div>
+                      
+                      {/* Horizontal Progress Bar */}
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative border border-slate-200/20">
+                        <div 
+                          className="h-full bg-gradient-to-r from-slate-400 via-[#0F2D52] to-[#DC2626]" 
+                          style={{ width: '65%' }} 
+                        />
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-[10.5px] font-semibold text-slate-400">
+                        <span>Join Club</span>
+                        <span>Benefits Unlocked: 12/20</span>
+                        <span>Next Tier: 1500 XP</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-start gap-2.5">
+                      <div className="p-1.5 bg-[#EFF4FB] rounded-lg text-[#0F2D52] shrink-0 mt-0.5">
+                        <Award className="w-4 h-4 text-[#0F2D52]" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[11.5px] font-bold text-[#0F2D52] block">Kehadiran Acara</span>
+                        <span className="text-[11px] text-slate-500 font-semibold leading-normal block">
+                          3/5 Acara dihadiri tahun ini untuk tebus pelekat eksklusif!
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Veloz Member Benefits banner section */}
                   <button
                     onClick={() => {
@@ -4768,12 +4864,109 @@ function AppContent({
                     </div>
                   </button>
 
+                  {/* Merchant Benefits Grid */}
+                  <div className="space-y-3.5 pt-2 text-left">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1.5 h-4 bg-[#0F2D52] rounded-full" />
+                      Rakan Niaga Pilihan
+                    </h3>
+                    
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Card 1 */}
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200/60 shadow-2xs flex flex-col justify-between h-full hover:bg-slate-50/50 transition-colors">
+                        <div className="p-2 bg-[#EFF4FB] rounded-xl text-[#0F2D52] w-fit">
+                          <Car className="w-4 h-4 text-[#0F2D52]" />
+                        </div>
+                        <div className="mt-4.5 space-y-0.5">
+                          <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Workshop</span>
+                          <span className="text-[10px] text-slate-550 font-bold leading-tight block">
+                            Diskaun 10% di Bengkel X
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 2 */}
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200/60 shadow-2xs flex flex-col justify-between h-full hover:bg-slate-50/50 transition-colors">
+                        <div className="p-2 bg-[#EFF4FB] rounded-xl text-[#0F2D52] w-fit">
+                          <Compass className="w-4 h-4 text-[#0F2D52]" />
+                        </div>
+                        <div className="mt-4.5 space-y-0.5">
+                          <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Lifestyle</span>
+                          <span className="text-[10px] text-slate-550 font-bold leading-tight block">
+                            Diskaun Ahli di Kafe Y
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 3 */}
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200/60 shadow-2xs flex flex-col justify-between h-full hover:bg-slate-50/50 transition-colors">
+                        <div className="p-2 bg-[#EFF4FB] rounded-xl text-[#0F2D52] w-fit">
+                          <Shield className="w-4 h-4 text-[#0F2D52]" />
+                        </div>
+                        <div className="mt-4.5 space-y-0.5">
+                          <span className="text-[11px] font-black text-[#0F2D52] block leading-tight">Insurance</span>
+                          <span className="text-[10px] text-slate-550 font-bold leading-tight block">
+                            Rebat Eksklusif Takaful
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Dynamic Proof Notice box */}
                   <div className="flex gap-3 bg-slate-100/50 border border-slate-200/30 p-4 rounded-2xl mt-1 text-left">
                     <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
                       This digital card is a valid proof of membership for MVOC Malaysia. Please present this card at all official events for attendance verification.
                     </p>
+                  </div>
+
+                  {/* Seksyen Komuniti & Aktiviti Terkini */}
+                  <div className="space-y-4 pt-3 border-t border-slate-100 text-left">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1.5 h-4 bg-red-500 rounded-full" />
+                      Komuniti & Aktiviti
+                    </h3>
+
+                    {/* Notice Board Ticker */}
+                    <div className="bg-slate-50 border border-slate-200/50 px-4 py-3 rounded-2xl relative overflow-hidden flex items-center gap-3 shadow-3xs">
+                      <div className="flex h-2 w-2 relative shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                      </div>
+                      <div className="flex-1 overflow-hidden h-5 relative">
+                        {/* Smooth sliding announcement */}
+                        <div className="absolute w-full text-xs text-slate-600 font-bold animate-marquee whitespace-nowrap">
+                          📣 Baju jersi edisi terhad MVOC kini dibuka untuk tempahan! Sila layari seksyen Pengumuman kelab atau hubungi AJK Chapter anda.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Upcoming Event Card */}
+                    <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs relative overflow-hidden text-left flex justify-between items-center gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200/50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Upcoming Event
+                        </span>
+                        <h4 className="text-sm font-black text-[#0F2D52] pt-1 tracking-tight">
+                          MVOC Merdeka Convoy 2026
+                        </h4>
+                        <div className="flex items-center gap-1.5 text-[10.5px] text-slate-500 font-semibold">
+                          <Calendar className="w-3.5 h-3.5 text-[#0F2D52] shrink-0" />
+                          <span>Tarikh: 31 Ogos 2026</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setCurrentTab('events');
+                          triggerToast('Navigating to Club Events page', 'info');
+                        }}
+                        className="bg-[#0F2D52] hover:bg-[#0A223D] active:scale-95 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-sm cursor-pointer select-none whitespace-nowrap"
+                      >
+                        RSVP Sini
+                      </button>
+                    </div>
                   </div>
 
                   {/* Exchanged Contacts Direct UI Directory */}
