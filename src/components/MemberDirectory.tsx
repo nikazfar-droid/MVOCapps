@@ -382,6 +382,19 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                     )}
                   </div>
                   <p className="text-xs text-slate-400 font-bold mt-0.5 font-mono">MVOC Member ID: {selectedMember.mvocId}</p>
+                  {selectedMember.mvocId && selectedMember.mvocId.toUpperCase() === 'MVOC-0001' && (
+                    <div className="mt-2 flex justify-center">
+                      <a 
+                        href="https://linktr.ee/mvoc" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-1.5 text-xs text-[#00E676] hover:text-[#00C853] hover:bg-[#00E676]/20 font-bold transition-all bg-[#00E676]/10 px-3 py-1.5 rounded-xl border border-[#00E676]/20"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Linktree</span>
+                      </a>
+                    </div>
+                  )}
                   {selectedMember.managedChapter && (
                     <div className="mt-2.5 flex justify-center">
                       <span className="px-2.5 py-1 text-[10px] font-bold bg-[#0f2d52] text-white rounded-full border border-blue-500/30 uppercase tracking-widest shadow-xs">
