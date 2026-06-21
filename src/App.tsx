@@ -5338,11 +5338,16 @@ function AppContent({
                             {/* Secure Member Verification QR Display */}
                             <div className="bg-slate-50 p-4 rounded-2xl flex flex-col items-center justify-center border border-slate-150 relative overflow-hidden">
                               <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200">
-                                <QrCode className="w-28 h-28 text-[#0F2D52]" />
+                                <QRCodeSVG 
+                                  value={`https://mvoc.my/card/${displayMvocId}`} 
+                                  size={112} 
+                                  level="H" 
+                                  className="text-[#0F2D52]"
+                                />
                               </div>
                               <div className="mt-3 space-y-0.5">
                                 <span className="font-mono text-[10.5px] font-extrabold text-[#0F2D52] tracking-wider uppercase block">
-                                  SCAN-99234-SECUREBYMVOC
+                                  SCAN-{displayMvocId}-SECUREBYMVOC
                                 </span>
                                 <span className="text-[8.5px] text-emerald-600 font-extrabold block uppercase tracking-widest">
                                   ● Valid &amp; Verified by Administrator
@@ -5350,40 +5355,8 @@ function AppContent({
                               </div>
                             </div>
 
-                            {/* Apple / Google Wallet Badges Grid */}
+                            {/* Download Action Section */}
                             <div className="space-y-2.5">
-                              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Download Digital Wallet Pass</p>
-                              
-                              <div className="grid grid-cols-2 gap-2.5">
-                                {/* Simulated Apple Wallet integration */}
-                                <button
-                                  onClick={() => {
-                                    triggerToast('Connecting to Apple Wallet API...', 'info');
-                                    setTimeout(() => {
-                                      triggerToast('Card successfully added to device Apple Wallet!', 'success');
-                                      setIsWalletModalOpen(false);
-                                    }, 1200);
-                                  }}
-                                  className="bg-black hover:bg-slate-900 text-white rounded-xl py-2 px-3 flex items-center justify-center gap-1.5 font-bold text-[10.5px] shadow-sm transform hover:scale-[1.01] transition active:scale-97 cursor-pointer"
-                                >
-                                  <span> Add to Apple Wallet</span>
-                                </button>
-
-                                {/* Simulated Google Wallet integration */}
-                                <button
-                                  onClick={() => {
-                                    triggerToast('Connecting to Google Wallet API...', 'info');
-                                    setTimeout(() => {
-                                      triggerToast('Card successfully saved to device Google Wallet!', 'success');
-                                      setIsWalletModalOpen(false);
-                                    }, 1200);
-                                  }}
-                                  className="bg-slate-950 hover:bg-slate-900 text-white rounded-xl py-2 px-3 flex items-center justify-center gap-1.5 font-bold text-[10.5px] shadow-sm transform hover:scale-[1.01] transition active:scale-97 cursor-pointer border border-white/10"
-                                >
-                                  <span>G Save to G-Wallet</span>
-                                </button>
-                              </div>
-
                               <button
                                 onClick={() => {
                                   triggerToast('Generating high resolution image...', 'info');
