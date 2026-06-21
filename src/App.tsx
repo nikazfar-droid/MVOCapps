@@ -68,11 +68,7 @@ import {
   Award,
   ShieldAlert,
   Trash2,
-  UserCog,
-  Facebook,
-  Instagram,
-  Globe,
-  Coffee
+  UserCog
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import StateChapters from './components/StateChapters';
@@ -1145,12 +1141,11 @@ function AppContent({
 
     // Tilt limits (Max tilt: 15 degrees)
     const rotateX = ((centerY - y) / centerY) * 15;
-    // Invert Y rotation direction if the card is flipped to keep intuitive control
+    // Inverting Y axis tilt if card is flipped
     const rotateY = (((x - centerX) / centerX) * 15) * (isCardFlipped ? -1 : 1);
 
-    // Glare position calculation (moving opposite to cursor/tilt)
-    const glareX = 100 - (x / card.width) * 100;
-    const glareY = 100 - (y / card.height) * 100;
+    const glareX = (x / card.width) * 100;
+    const glareY = (y / card.height) * 100;
 
     setTiltStyle({
       transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`,
@@ -1184,17 +1179,15 @@ function AppContent({
       const gamma = e.gamma;
       if (beta === null || gamma === null) return;
 
-      // Limit values to reasonable ranges
-      const limitedBeta = Math.max(Math.min(beta, 30), -30);
+      const targetBeta = beta - 45;
+      const limitedBeta = Math.max(Math.min(targetBeta, 30), -30);
       const limitedGamma = Math.max(Math.min(gamma, 30), -30);
 
-      // Convert to degrees (Max tilt: 15)
-      const rotateX = (limitedBeta / 30) * 15;
+      const rotateX = -(limitedBeta / 30) * 15;
       const rotateY = ((limitedGamma / 30) * 15) * (isCardFlipped ? -1 : 1);
 
-      // Glare calculation opposite to tilt direction
-      const glareX = 50 - (rotateY / 15) * 50;
-      const glareY = 50 + (rotateX / 15) * 50;
+      const glareX = 50 + (rotateY / 15) * 50;
+      const glareY = 50 - (rotateX / 15) * 50;
 
       setTiltStyle({
         transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1)`,
@@ -1208,7 +1201,6 @@ function AppContent({
       });
     };
 
-    // Only activate device orientation on touch devices if supported
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouchDevice && window.DeviceOrientationEvent) {
       window.addEventListener('deviceorientation', handleDeviceOrientation);
@@ -2627,19 +2619,19 @@ function AppContent({
       ) : (
         
         // RENDER LOGGED IN STATE (PORTAL & NAVIGATION DRAWER COMPONENT)
-        <div className={`flex-1 flex flex-col h-full transition-colors duration-300 ${currentTab === 'card' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50'}`}>
+        <div className="flex-1 flex flex-col h-full bg-slate-50">
           
           {/* Top Bar Navigation */}
-          <nav className={`w-full border-b px-4 py-3 sticky top-0 z-40 flex items-center justify-between shadow-sm transition-colors duration-300 ${currentTab === 'card' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-100'}`}>
+          <nav className="w-full bg-white border-b border-slate-100 px-4 py-3 sticky top-0 z-40 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setIsDrawerOpen(true)}
-                className={`p-1.5 rounded-lg transition min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer ${currentTab === 'card' ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white' : 'text-slate-700 hover:bg-slate-50'}`}
+                className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-50 transition min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer"
                 id="btn-open-sidebar"
               >
-                <Menu className={`w-6 h-6 ${currentTab === 'card' ? 'text-white' : 'text-[#0F2D52]'}`} />
+                <Menu className="w-6 h-6 text-[#0F2D52]" />
               </button>
-              <span className={`font-display font-extrabold text-xl tracking-tight transition-colors duration-300 ${currentTab === 'card' ? 'text-white' : 'text-[#0F2D52]'}`}>MVOC Malaysia</span>
+              <span className="font-display font-extrabold text-[#0F2D52] text-xl tracking-tight">MVOC Malaysia</span>
             </div>
 
             <div className="flex items-center gap-2 relative z-20">
@@ -2648,7 +2640,7 @@ function AppContent({
                   console.log('Top bar My Member QR Button clicked!');
                   setIsQrModalOpen(true);
                 }}
-                className={`relative z-[9999] pointer-events-auto p-1.5 rounded-lg min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer transition-colors ${currentTab === 'card' ? 'text-slate-300 hover:text-white hover:bg-slate-800/60' : 'text-slate-700 hover:text-[#0F2D52] hover:bg-slate-50'}`}
+                className="relative z-[9999] pointer-events-auto p-1.5 text-slate-700 hover:text-[#0F2D52] rounded-lg hover:bg-slate-50 min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer"
                 style={{ cursor: 'pointer' }}
                 title="My Member QR"
               >
@@ -2660,7 +2652,7 @@ function AppContent({
                   console.log('Top bar Camera/Scanner Button clicked!');
                   setIsScannerOpen(true);
                 }}
-                className={`relative z-[9999] pointer-events-auto p-1.5 rounded-lg min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer transition-colors ${currentTab === 'card' ? 'text-slate-300 hover:text-white hover:bg-slate-800/60' : 'text-slate-700 hover:text-[#0F2D52] hover:bg-slate-50'}`}
+                className="relative z-[9999] pointer-events-auto p-1.5 text-slate-700 hover:text-[#0F2D52] rounded-lg hover:bg-slate-50 min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer"
                 style={{ cursor: 'pointer' }}
                 title="Scan QR Code"
               >
@@ -2731,7 +2723,7 @@ function AppContent({
           </nav>
 
           {/* BACKGROUND BACKGROUND LAYOUT VIEW CONTROLLER */}
-          <main className={`flex-1 overflow-x-hidden overflow-y-auto w-full max-w-md mx-auto px-4 pt-6 pb-24 transition-colors duration-300 ${currentTab === 'card' ? 'bg-slate-950 text-slate-100' : ''}`}>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-md mx-auto px-4 pt-6 pb-24">
             <AnimatePresence mode="wait">
               
               {/* TAB 1: DASHBOARD VIEW */}
@@ -4648,11 +4640,8 @@ function AppContent({
                 >
                   {/* Title Header */}
                   <div className="space-y-1 text-left">
-                    <h2 className="text-2xl font-display font-black tracking-tight text-white flex items-center gap-2">
-                      <span className="w-2.5 h-6 bg-red-650 rounded-full" />
-                      Digital Membership
-                    </h2>
-                    <p className="text-[12.5px] text-slate-450 font-semibold leading-relaxed">Present this card for events and merchant benefits.</p>
+                    <h2 className="text-2xl font-display font-black tracking-tight text-[#0F2D52]">Digital Membership</h2>
+                    <p className="text-[12.5px] text-slate-500 font-semibold leading-relaxed">Present this card for events and merchant benefits.</p>
                   </div>
 
                   {/* Premium Carbon Fiber/Sleek Dark Membership Card */}
@@ -4660,10 +4649,7 @@ function AppContent({
                     ref={cardRef}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={handleMouseLeave}
-                    style={{
-                      ...tiltStyle,
-                      boxShadow: '0 15px 35px rgba(0,0,0,0.6), 0 0 15px rgba(239,68,68,0.1)'
-                    }}
+                    style={tiltStyle}
                     className="w-full aspect-[1.65/1] cursor-pointer relative"
                     onClick={() => setIsCardFlipped(!isCardFlipped)}
                   >
@@ -4675,10 +4661,10 @@ function AppContent({
                     >
                       {/* FRONT FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#000000] rounded-3xl overflow-hidden shadow-2xl border border-neutral-900 flex items-center justify-center select-none group"
+                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex items-center justify-center select-none group bg-cover bg-center"
                         style={{ 
                           backfaceVisibility: 'hidden',
-                          backgroundColor: '#000000'
+                          backgroundImage: `url(${mvocPremiumFront})`
                         }}
                       >
                          {/* Glare/Shine overlay */}
@@ -4695,11 +4681,11 @@ function AppContent({
 
                       {/* BACK FACE */}
                       <div
-                        className="absolute inset-0 w-full h-full bg-[#000000] rounded-3xl overflow-hidden shadow-2xl border border-neutral-900 flex select-none group"
+                        className="absolute inset-0 w-full h-full bg-[#111] rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 flex flex-col items-center justify-center select-none group bg-cover bg-center"
                         style={{ 
                           backfaceVisibility: 'hidden', 
                           transform: 'rotateY(180deg)',
-                          backgroundColor: '#000000'
+                          backgroundImage: `url(${mvocPremiumBack})`
                         }}
                       >
                         {/* Glare/Shine overlay */}
@@ -4707,132 +4693,40 @@ function AppContent({
                           className="absolute inset-0 pointer-events-none z-10" 
                           style={glareStyle}
                         />
-
-                        {/* Layout Split: Left side QR, Right side Member Details & Socials */}
-                        <div className="flex w-full h-full p-4.5 items-center justify-between gap-4 text-left z-20">
-                          {/* QR Code Container */}
-                          <div className="bg-white p-2 rounded-xl flex items-center justify-center shrink-0 shadow-lg border border-slate-900">
-                            <QRCodeSVG 
-                              value={qrPayloadString} 
-                              size={100} 
-                              level="M" 
-                              className="w-20 h-20 sm:w-[95px] sm:h-[95px]"
-                            />
-                          </div>
-
-                          {/* Member Details & Social links */}
-                          <div className="flex-1 flex flex-col justify-between h-full py-0.5 min-w-0">
-                            <div>
-                              <h4 className="text-[15px] sm:text-[17px] font-display font-black tracking-tight text-white truncate drop-shadow-md">
-                                {displayName}
-                              </h4>
-                              <p className="text-[11px] font-bold font-mono text-red-500 mt-0.5 tracking-wide">
-                                ID: {displayMvocId}
-                              </p>
-                              <p className="text-[10px] text-slate-350 font-bold mt-0.5">
-                                {displayChapter}
-                              </p>
-                            </div>
-
-                            {/* Expiry and Social media links */}
-                            <div className="space-y-1.5 mt-1">
-                              <span className="text-[8.5px] font-black text-slate-300 tracking-wider block bg-slate-900/70 border border-slate-800 px-2 py-0.5 rounded-md w-max">
-                                Tarikh Luput: 31 Disember 2027
-                              </span>
-                              
-                              {/* Social Media Links */}
-                              <div className="flex gap-3 text-slate-400">
-                                <a 
-                                  href="https://facebook.com/mvoc" 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="hover:text-red-500 transition-colors"
-                                >
-                                  <Facebook className="w-3.5 h-3.5" />
-                                </a>
-                                <a 
-                                  href="https://instagram.com/mvoc" 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="hover:text-red-500 transition-colors"
-                                >
-                                  <Instagram className="w-3.5 h-3.5" />
-                                </a>
-                                <a 
-                                  href="https://mvoc.my" 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="hover:text-red-500 transition-colors"
-                                >
-                                  <Globe className="w-3.5 h-3.5" />
-                                </a>
-                              </div>
-                            </div>
-                          </div>
+                        
+                        <div className="flex flex-col items-center justify-center relative w-full px-8 mt-4">
+                          <h4 
+                            className="text-[20px] sm:text-[22px] leading-tight font-display font-bold tracking-widest text-[#e2e8f0] text-center uppercase drop-shadow-xl"
+                            style={{ textShadow: "1px 1px 1px #fff, -1px -1px 1px #888, 2px 2px 4px rgba(0,0,0,0.8)" }}
+                          >
+                            {displayName}
+                          </h4>
+                          <span 
+                            className="text-[14px] sm:text-[15px] font-semibold tracking-[0.15em] font-sans text-[#cbd5e1] mt-1.5 drop-shadow-xl"
+                            style={{ textShadow: "1px 1px 0px #fff, -1px -1px 0px #888, 2px 2px 3px rgba(0,0,0,0.8)" }}
+                          >
+                            {displayMvocId}
+                          </span>
                         </div>
                       </div>
                     </motion.div>
                   </div>
 
-                  {/* 2. SISTEM TAHAP KEAHLIAN & METER ACARA (GAMIFICATION) */}
-                  <div className="bg-slate-900 border border-slate-800/80 p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-red-600/5 rounded-full blur-xl pointer-events-none" />
-                    
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Veloz Tier & Rewards</span>
-                      <span className="text-[10px] font-black text-red-500 bg-red-950/40 border border-red-900/40 px-2.5 py-0.5 rounded-full">
-                        Benefits Unlocked: 12/20
-                      </span>
-                    </div>
 
-                    {/* Progress Bar with Tier Labels */}
-                    <div className="space-y-2 mt-3.5">
-                      <div className="relative w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-850">
-                        {/* Chrome/Silver base, Red progress for Gold */}
-                        <div 
-                          className="absolute top-0 left-0 h-full bg-gradient-to-r from-slate-400 via-red-500 to-red-600 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.6)]"
-                          style={{ width: '65%' }} // 65% puts it at Gold
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] font-extrabold tracking-wider text-slate-400">
-                        <span className="text-slate-500">SILVER</span>
-                        <span className="text-red-500 font-black drop-shadow-[0_0_4px_rgba(239,68,68,0.4)]">GOLD (AKTIF)</span>
-                        <span className="text-slate-500">PLATINUM</span>
-                      </div>
-                    </div>
-
-                    {/* Event Attendance Meter */}
-                    <div className="mt-4 pt-3.5 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-semibold leading-relaxed text-[11px] text-left pr-2">
-                        3/5 Acara dihadiri tahun ini untuk tebus pelekat eksklusif!
-                      </span>
-                      <div className="flex gap-1 shrink-0">
-                        {[1, 2, 3].map((n) => (
-                          <div key={n} className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]" />
-                        ))}
-                        {[4, 5].map((n) => (
-                          <div key={n} className="w-2.5 h-2.5 rounded-full bg-slate-800 border border-slate-700" />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
 
                   {/* Share Card & Save Offline Grid */}
                   <div className="grid grid-cols-2 gap-4">
                     {/* Share Button Card */}
                     <button
                       onClick={() => setIsShareCardModalOpen(true)}
-                      className="bg-slate-900 p-4 rounded-2xl border border-slate-800/80 shadow-md flex flex-col items-start text-left cursor-pointer hover:bg-slate-850 transition-all active:scale-[0.98] select-none h-full text-white font-sans"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs flex flex-col items-start text-left cursor-pointer hover:bg-slate-50/50 transition-all active:scale-[0.98] select-none h-full"
                     >
-                      <div className="p-2.5 bg-red-950/20 text-red-500 rounded-xl shrink-0 border border-red-900/10">
-                        <Share2 className="w-5 h-5 text-red-500 stroke-[2.3]" />
+                      <div className="p-2.5 bg-[#EFF4FB] rounded-xl text-[#0F2D52] shrink-0">
+                        <Share2 className="w-5 h-5 text-[#0F2D52] stroke-[2.3]" />
                       </div>
                       <div className="mt-4">
-                        <span className="text-sm font-black text-slate-200 block">Share Card</span>
-                        <span className="text-[11px] text-slate-400 font-semibold leading-normal block mt-0.5">
+                        <span className="text-sm font-black text-[#0F2D52] block">Share Card</span>
+                        <span className="text-[11px] text-slate-500 font-bold leading-normal block mt-0.5">
                           Send to family members
                         </span>
                       </div>
@@ -4841,174 +4735,85 @@ function AppContent({
                     {/* Save Offline Card */}
                     <button
                       onClick={() => setIsWalletModalOpen(true)}
-                      className="bg-slate-900 p-4 rounded-2xl border border-slate-800/80 shadow-md flex flex-col items-start text-left cursor-pointer hover:bg-slate-850 transition-all active:scale-[0.98] select-none h-full text-white font-sans"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs flex flex-col items-start text-left cursor-pointer hover:bg-slate-50/50 transition-all active:scale-[0.98] select-none h-full"
                     >
-                      <div className="p-2.5 bg-red-950/20 text-red-500 rounded-xl shrink-0 border border-red-900/10">
-                        <Download className="w-5 h-5 text-red-500 stroke-[2.3]" />
+                      <div className="p-2.5 bg-[#EFF4FB] rounded-xl text-[#0F2D52] shrink-0">
+                        <Download className="w-5 h-5 text-[#0F2D52] stroke-[2.3]" />
                       </div>
                       <div className="mt-4">
-                        <span className="text-sm font-black text-slate-200 block">Save Offline</span>
-                        <span className="text-[11px] text-slate-400 font-semibold leading-normal block mt-0.5">
+                        <span className="text-sm font-black text-[#0F2D52] block">Save Offline</span>
+                        <span className="text-[11px] text-slate-500 font-bold leading-normal block mt-0.5">
                           Add to Apple/Google Wallet
                         </span>
                       </div>
                     </button>
                   </div>
 
-                  {/* 3. KOMPONEN GRID MANFAAT RAKAN NIAGA (MERCHANT BENEFITS) */}
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-3">
-                      {/* Card 1: Workshop */}
-                      <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl flex flex-col items-center text-center shadow-md relative overflow-hidden">
-                        <div className="p-2 bg-red-950/25 text-red-500 rounded-lg mb-2 border border-red-900/10">
-                          <Car className="w-4.5 h-4.5" />
-                        </div>
-                        <span className="text-[10px] font-black text-slate-200 block truncate w-full">Workshop</span>
-                        <p className="text-[9px] text-slate-450 font-bold mt-1 leading-tight">
-                          Diskaun 10% di Bengkel X
-                        </p>
-                      </div>
-
-                      {/* Card 2: Lifestyle */}
-                      <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl flex flex-col items-center text-center shadow-md relative overflow-hidden">
-                        <div className="p-2 bg-red-950/25 text-red-500 rounded-lg mb-2 border border-red-900/10">
-                          <Coffee className="w-4.5 h-4.5" />
-                        </div>
-                        <span className="text-[10px] font-black text-slate-200 block truncate w-full">Lifestyle Perks</span>
-                        <p className="text-[9px] text-slate-455 font-bold mt-1 leading-tight">
-                          Diskaun Ahli di Kafe Y
-                        </p>
-                      </div>
-
-                      {/* Card 3: Insurance */}
-                      <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl flex flex-col items-center text-center shadow-md relative overflow-hidden">
-                        <div className="p-2 bg-red-950/25 text-red-500 rounded-lg mb-2 border border-red-900/10">
-                          <Shield className="w-4.5 h-4.5" />
-                        </div>
-                        <span className="text-[10px] font-black text-slate-200 block truncate w-full">Insurance</span>
-                        <p className="text-[9px] text-slate-455 font-bold mt-1 leading-tight">
-                          Rebat Eksklusif Takaful
-                        </p>
-                      </div>
+                  {/* Veloz Member Benefits banner section */}
+                  <button
+                    onClick={() => {
+                      setCurrentTab('merchants');
+                      triggerToast('Opening exclusive MVOC Merchant Partners Hub', 'success');
+                    }}
+                    className="w-full bg-[#0F2D52] text-white p-4 rounded-2xl border border-white/5 shadow-md flex items-center justify-between cursor-pointer hover:bg-[#0A223D] transition active:scale-[0.99] select-none mt-1 text-left"
+                  >
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-sm font-black text-white block">Veloz Member Benefits</span>
+                      <span className="text-[11px] text-slate-350 font-bold block">
+                        Explore 50+ exclusive merchant discounts
+                      </span>
                     </div>
-
-                    <button
-                      onClick={() => {
-                        setCurrentTab('merchants');
-                        triggerToast('Opening exclusive MVOC Merchant Partners Hub', 'success');
-                      }}
-                      className="w-full bg-[#0F2D52] hover:bg-slate-800 text-white p-3.5 rounded-2xl border border-white/5 shadow-md flex items-center justify-between cursor-pointer transition active:scale-[0.99] select-none text-left"
-                    >
-                      <div className="space-y-0.5 pr-2">
-                        <span className="text-xs font-black uppercase tracking-wider block">Veloz Member Benefits</span>
-                        <span className="text-[10.5px] text-slate-400 font-semibold block">
-                          Explore 50+ Exclusive Discounts
-                        </span>
-                      </div>
-                      <div className="bg-red-650 p-2 rounded-xl text-white hover:bg-red-550 transition shrink-0 flex items-center justify-center">
-                        <ChevronRight className="w-4 h-4 stroke-[3]" />
-                      </div>
-                    </button>
-                  </div>
+                    <div className="bg-amber-400 p-2 rounded-xl text-[#0F2D52] hover:bg-amber-300 transition shrink-0 flex items-center justify-center">
+                      <ChevronRight className="w-4 h-4 stroke-[3]" />
+                    </div>
+                  </button>
 
                   {/* Dynamic Proof Notice box */}
-                  <div className="flex gap-3 bg-slate-900 border border-slate-800/80 p-4 rounded-2xl text-left">
+                  <div className="flex gap-3 bg-slate-100/50 border border-slate-200/30 p-4 rounded-2xl mt-1 text-left">
                     <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-[11.5px] text-slate-400 font-semibold leading-relaxed">
+                    <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
                       This digital card is a valid proof of membership for MVOC Malaysia. Please present this card at all official events for attendance verification.
                     </p>
                   </div>
 
-                  {/* 4. SEKSYEN KOMUNITI & AKTIVITI TERKINI */}
-                  <div className="space-y-3.5 pt-2 border-t border-slate-850/60">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 text-left">
-                      <span className="w-1.5 h-4 bg-red-600 rounded-full" />
-                      Komuniti & Aktiviti Terkini
-                    </h3>
-
-                    {/* Notice Board Ticker */}
-                    <div className="bg-slate-900 border border-slate-800/80 px-4 py-3 rounded-2xl relative overflow-hidden flex items-center gap-3">
-                      <div className="flex h-2 w-2 relative shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                      </div>
-                      <div className="flex-1 overflow-hidden h-5 relative">
-                        {/* Smooth sliding announcement */}
-                        <div className="absolute w-full text-xs text-slate-300 font-semibold animate-marquee whitespace-nowrap">
-                          📣 Baju jersi edisi terhad MVOC kini dibuka untuk tempahan! Sila layari seksyen Pengumuman kelab atau hubungi AJK Chapter anda.
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Upcoming Event Card */}
-                    <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800/85 p-4.5 rounded-2xl shadow-lg relative overflow-hidden text-left">
-                      {/* Neon glow effect corner */}
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-red-600/10 rounded-full blur-xl pointer-events-none" />
-                      
-                      <div className="flex justify-between items-center gap-4">
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-black text-red-500 bg-red-950/50 border border-red-900/40 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                            Upcoming Event
-                          </span>
-                          <h4 className="text-sm font-black text-slate-200 pt-1 tracking-tight">
-                            MVOC Merdeka Convoy 2026
-                          </h4>
-                          <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400 font-semibold">
-                            <Calendar className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                            <span>Tarikh: 31 Ogos 2026</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setCurrentTab('events');
-                            triggerToast('Navigating to Club Events page', 'info');
-                          }}
-                          className="bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-md cursor-pointer select-none whitespace-nowrap"
-                        >
-                          RSVP Sini
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Exchanged Contacts Direct UI Directory */}
                   {exchangedContacts.length > 0 && (
-                    <div className="mt-6 pt-5 border-t border-slate-850/60 text-left space-y-4">
+                    <div className="mt-6 pt-6 border-t border-slate-100 text-left space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                          <UserCheck className="w-4 h-4 text-slate-400" />
+                        <h3 className="text-sm font-black text-[#0F2D52] flex items-center gap-2">
+                          <UserCheck className="w-4.5 h-4.5" />
                           Contacts Met
                         </h3>
-                        <span className="text-[9px] font-extrabold text-slate-300 bg-slate-900 border border-slate-800 px-2.5 py-0.5 rounded-full font-mono uppercase">
-                          {exchangedContacts.length} Recorded
+                        <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                          {exchangedContacts.length} RECORDED
                         </span>
                       </div>
                       
                       <div className="space-y-3">
                         {exchangedContacts.map((contact, idx) => (
-                          <div key={contact.uid || idx} className="bg-slate-900 border border-slate-800/80 p-3.5 rounded-2xl flex items-center gap-3.5 shadow-sm hover:bg-slate-850/80 transition-colors">
-                            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center shrink-0">
+                          <div key={contact.uid || idx} className="bg-white border border-slate-200 p-3.5 rounded-2xl flex items-center gap-3.5 shadow-sm hover:bg-slate-50 transition-colors">
+                            <div className="w-10 h-10 rounded-full bg-[#EFF4FB] border border-[#0F2D52]/10 overflow-hidden flex items-center justify-center shrink-0">
                               {contact.photoURL ? (
                                 <img src={contact.photoURL} alt={contact.name} className="w-full h-full object-cover" />
                               ) : (
-                                <span className="text-sm font-black text-slate-400">
+                                <span className="text-sm font-black text-[#0F2D52]">
                                   {contact.name ? contact.name.charAt(0).toUpperCase() : '?'}
                                 </span>
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-black text-slate-200 truncate tracking-tight">{contact.name}</p>
+                              <p className="text-[13px] font-black text-slate-900 truncate tracking-tight">{contact.name}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] font-bold font-mono text-red-500 bg-red-950/40 border border-red-900/30 px-1.5 py-0.2 rounded">
+                                <span className="text-[10px] font-bold font-mono text-[#0F2D52] bg-[#eff4ff] px-1.5 py-0.5 rounded">
                                   {contact.mvocId}
                                 </span>
-                                <span className="text-[10px] font-semibold text-slate-455 truncate">
+                                <span className="text-[10px] font-semibold text-slate-500 truncate">
                                   {contact.chapter}
                                 </span>
                               </div>
                             </div>
                             {contact.phone && (
-                              <a href={`tel:${contact.phone}`} className="w-8 h-8 rounded-full bg-emerald-950/50 text-emerald-500 flex items-center justify-center border border-emerald-900/30 hover:bg-emerald-900/50 shrink-0 transition" title="Call Member">
+                              <a href={`tel:${contact.phone}`} className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 hover:bg-emerald-100 shrink-0 transition" title="Call Member">
                                 <Phone className="w-3.5 h-3.5" />
                               </a>
                             )}
