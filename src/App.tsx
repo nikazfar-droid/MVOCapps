@@ -766,6 +766,45 @@ function AppContent({
     );
   };
 
+  // Helper: Check if a nav module is enabled for the current user
+  const isModuleEnabled = (key: string): boolean => {
+    if (isSuperAdmin) return true; // Super Admin sentiasa boleh akses semua modul
+    return appConfig[key] !== false;
+  };
+
+  // Helper: Render a Quick Access card with live feature flag support
+  const renderQuickAccessCard = (
+    moduleKey: string,
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void
+  ) => {
+    const enabled = isModuleEnabled(moduleKey);
+    return (
+      <button
+        onClick={enabled ? onClick : undefined}
+        disabled={!enabled}
+        aria-disabled={!enabled}
+        title={!enabled ? 'Menu Ditutup oleh Admin' : label}
+        className={`bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs transition-all flex flex-col items-start gap-3 text-left focus:ring-2 focus:ring-[#0F2D52]/10 relative ${
+          enabled
+            ? 'hover:border-slate-300 cursor-pointer'
+            : 'opacity-40 grayscale cursor-not-allowed pointer-events-none'
+        }`}
+      >
+        {!enabled && (
+          <div className="absolute top-2 right-2 text-slate-400 z-10" title="Menu Ditutup oleh Admin">
+            <Lock className="w-3 h-3" />
+          </div>
+        )}
+        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+          {icon}
+        </div>
+        <span className="text-xs font-bold text-slate-800">{label}</span>
+      </button>
+    );
+  };
+
   const displayAvatarUrl = profileImage || userProfile?.photoURL || authUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80";
 
   // Super Admin administrative states
@@ -3162,10 +3201,20 @@ function AppContent({
                       {/* Card Action Buttons */}
                       <div className="mt-4 grid grid-cols-2 gap-3.5">
                         <button 
-                          onClick={() => setCurrentTab('card')}
-                          className="bg-[#0F2D52] hover:bg-[#184172] active:bg-[#081B34] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs min-h-[44px]"
+                          onClick={() => isModuleEnabled('card') && setCurrentTab('card')}
+                          disabled={!isModuleEnabled('card')}
+                          title={!isModuleEnabled('card') ? 'Menu Ditutup oleh Admin' : 'Digital Card'}
+                          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs min-h-[44px] ${
+                            isModuleEnabled('card')
+                              ? 'bg-[#0F2D52] hover:bg-[#184172] active:bg-[#081B34] text-white cursor-pointer'
+                              : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                          }`}
                         >
-                          <Contact className="w-4 h-4 shrink-0" />
+                          {isModuleEnabled('card') ? (
+                            <Contact className="w-4 h-4 shrink-0" />
+                          ) : (
+                            <Lock className="w-4 h-4 shrink-0" />
+                          )}
                           <span>Digital Card</span>
                         </button>
                         <button 
@@ -3187,78 +3236,55 @@ function AppContent({
                     <h3 className="text-sm font-extrabold text-slate-800 tracking-wide">Quick Access</h3>
                   </div>
 
-                  {/* Grid of Quick Access Cards matching the design perfectly */}
+                  {/* Grid of Quick Access Cards — Live Feature Flag controlled via appConfig */}
                   <div className="grid grid-cols-2 gap-3.5">
-                    
-                    {/* Membership Card */}
-                    <button 
-                      onClick={() => setCurrentTab('card')}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Contact className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Membership Card</span>
-                    </button>
+                    {/* Membership Card — controlled by appConfig.card */}
+                    {renderQuickAccessCard(
+                      'card',
+                      <Contact className="w-5 h-5 text-[#2563EB]" />,
+                      'Membership Card',
+                      () => setCurrentTab('card')
+                    )}
 
-                    {/* Register Event */}
-                    <button 
-                      onClick={() => setCurrentTab('events')}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Calendar className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Register Event</span>
-                    </button>
+                    {/* Register Event — controlled by appConfig.events */}
+                    {renderQuickAccessCard(
+                      'events',
+                      <Calendar className="w-5 h-5 text-[#2563EB]" />,
+                      'Register Event',
+                      () => setCurrentTab('events')
+                    )}
 
-                    {/* Convoy Registration */}
-                    <button 
-                      onClick={() => setCurrentTab('convoy')}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Car className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Convoy Registration</span>
-                    </button>
+                    {/* Convoy Registration — controlled by appConfig.convoy */}
+                    {renderQuickAccessCard(
+                      'convoy',
+                      <Car className="w-5 h-5 text-[#2563EB]" />,
+                      'Convoy Registration',
+                      () => setCurrentTab('convoy')
+                    )}
 
-                    {/* Club News */}
-                    <button 
-                      onClick={() => setCurrentTab('announcements')}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Volume2 className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Club News</span>
-                    </button>
+                    {/* Club News — controlled by appConfig.announcements */}
+                    {renderQuickAccessCard(
+                      'announcements',
+                      <Volume2 className="w-5 h-5 text-[#2563EB]" />,
+                      'Club News',
+                      () => setCurrentTab('announcements')
+                    )}
 
-                    {/* Gallery */}
-                    <button 
-                      onClick={() => setCurrentTab('gallery')}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Image className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Gallery</span>
-                    </button>
+                    {/* Gallery — controlled by appConfig.gallery */}
+                    {renderQuickAccessCard(
+                      'gallery',
+                      <Image className="w-5 h-5 text-[#2563EB]" />,
+                      'Gallery',
+                      () => setCurrentTab('gallery')
+                    )}
 
-                    {/* Directory */}
-                    <button 
-                      onClick={() => {
-                        setCurrentTab('profile');
-                        triggerToast('Opening MVOC member directory...', 'info');
-                      }}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/50 shadow-xs hover:border-slate-300 transition-all flex flex-col items-start gap-3 cursor-pointer text-left focus:ring-2 focus:ring-[#0F2D52]/10"
-                    >
-                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <Users className="w-5 h-5 text-[#2563EB]" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">Directory</span>
-                    </button>
-
+                    {/* Member Directory — controlled by appConfig.directory */}
+                    {renderQuickAccessCard(
+                      'directory',
+                      <Users className="w-5 h-5 text-[#2563EB]" />,
+                      'Directory',
+                      () => navigateToTab('members')
+                    )}
                   </div>
 
                   {/* Next Major Event Banner */}
