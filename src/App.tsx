@@ -2943,32 +2943,32 @@ function AppContent({
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
 
-      // Detect mobile browser — use redirect flow (more reliable on mobile via IP)
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-      if (isMobile) {
-        // Redirect flow: page will reload, result captured in useEffect below
-        await signInWithRedirect(auth, provider);
-        return; // page will redirect away, no further code runs
-      } else {
-        // Popup flow for desktop
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        if (user) {
-          const isOk = await triggerSync(user.uid, user.email || '');
-          setIsLoggedIn(true);
-          setCurrentTab('dashboard');
-          if (isOk) {
-            triggerToast(`Log masuk berjaya! ${user.displayName || user.email}`, 'success');
-          } else {
-            triggerToast(`Onboarding terhenti: ${user.email} tidak berdaftar dalam pangkalan data.`, 'error');
-          }
+      // Always prioritize Popup flow. It is significantly more reliable on modern mobile 
+      // browsers (Safari/Chrome) as it doesn't wipe application state.
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      if (user) {
+        const isOk = await triggerSync(user.uid, user.email || '');
+        setIsLoggedIn(true);
+        setCurrentTab('dashboard');
+        if (isOk) {
+          triggerToast(`Log masuk berjaya! ${user.displayName || user.email}`, 'success');
+        } else {
+          triggerToast(`Onboarding terhenti: ${user.email} tidak berdaftar dalam pangkalan data.`, 'error');
         }
       }
     } catch (err: any) {
       console.warn("Google Sign In error:", err);
-      setAuthPopupErrorMsg(err?.message || String(err));
-      setIsAuthPopupBlockedOpen(true);
+      // Fallback to redirect ONLY if popup is blocked (common in in-app browsers like FB/IG)
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/web-storage-unsupported') {
+        triggerToast('Popup dihalang. Mencuba mod alternatif...', 'warning');
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await signInWithRedirect(auth, provider);
+      } else {
+        setAuthPopupErrorMsg(err?.message || String(err));
+        setIsAuthPopupBlockedOpen(true);
+      }
     } finally {
       setIsLoading(false);
     }
