@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, MapPin, Link as LinkIcon, Download, Plus, QrCode, AlertTriangle, Menu, Settings, CheckCircle2, Trash2, RefreshCw } from 'lucide-react';
+import { X, Calendar, MapPin, Link as LinkIcon, Download, Plus, QrCode, AlertTriangle, Menu, Settings, CheckCircle2, Trash2, RefreshCw, Lock } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { db, auth } from '../lib/firebase';
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, Timestamp, onSnapshot, deleteDoc } from 'firebase/firestore';
