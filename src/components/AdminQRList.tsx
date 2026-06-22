@@ -564,7 +564,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                   
                   <div className="mt-5 p-5 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-200/60 shadow-inner">
                     <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-100 flex flex-col items-center justify-center">
-                      <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'event', refId: 'placeholder-event', name: 'MVOC National Meet 2024' }))}`} size={120} level="H" />
+                      <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'event', refId: 'placeholder-event', name: 'MVOC National Meet 2024' }))}`} size={120} level="H" imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 22, width: 22, excavate: true }} />
                     </div>
                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Event Attendance</span>
                   </div>
@@ -626,7 +626,8 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                               id={`qr-event-${event.id}`} 
                               value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'event', refId: String(event.id), name: event.title }))}`} 
                               size={120} 
-                              level="H" 
+                              level="H"
+                              imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 22, width: 22, excavate: true }}
                             />
                           </div>
                           {isInactive && (
@@ -698,7 +699,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
                       </div>
                       <div className="mt-1">
-                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'convoy', refId: 'placeholder-convoy', name: 'Genting Highland Morning Drive' }))}`} size={90} level="H" />
+                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'convoy', refId: 'placeholder-convoy', name: 'Genting Highland Morning Drive' }))}`} size={90} level="H" imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 17, width: 17, excavate: true }} />
                       </div>
                     </div>
                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Convoy Check-in</span>
@@ -772,7 +773,8 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                                 id={`qr-convoy-${convoy.id}`} 
                                 value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'convoy', refId: String(convoy.id), name: convoy.title || convoy.name }))}`} 
                                 size={90} 
-                                level="H" 
+                                level="H"
+                                imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 17, width: 17, excavate: true }}
                               />
                             </div>
                           </div>
@@ -841,7 +843,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                         <span className="text-[7px] text-white/50 ml-1 font-bold">CHAPTER ENTRY</span>
                       </div>
                       <div className="bg-white p-3.5 flex justify-center items-center">
-                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: 'placeholder-chapter', name: 'Klang Valley Chapter Gathering' }))}`} size={80} level="H" />
+                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: 'placeholder-chapter', name: 'Klang Valley Chapter Gathering' }))}`} size={80} level="H" imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 15, width: 15, excavate: true }} />
                       </div>
                     </div>
                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Chapter Entry</span>
@@ -911,7 +913,8 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                                 id={`qr-attendance-${session.id}`} 
                                 value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: String(session.id), name: session.title }))}`} 
                                 size={80} 
-                                level="H" 
+                                level="H"
+                                imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 15, width: 15, excavate: true }}
                               />
                             </div>
                           </div>

@@ -6066,6 +6066,14 @@ function AppContent({
                                   size={112} 
                                   level="H" 
                                   className="text-[#0F2D52]"
+                                  imageSettings={{
+                                    src: "/mvoc_logo.png",
+                                    x: undefined,
+                                    y: undefined,
+                                    height: 22,
+                                    width: 22,
+                                    excavate: true,
+                                  }}
                                 />
                               </div>
                               <div className="mt-3 space-y-0.5">
@@ -10532,7 +10540,20 @@ function AppContent({
               </div>
 
               <div className="bg-white p-4 border-2 border-slate-200 rounded-2xl shadow-inner w-full aspect-square flex items-center justify-center">
-                <QRCodeSVG value={qrPayloadString} size={256} className="w-full h-full text-[#112F56]" />
+                <QRCodeSVG 
+                  value={qrPayloadString} 
+                  size={256} 
+                  level="H"
+                  className="w-full h-full text-[#112F56]"
+                  imageSettings={{
+                    src: "/mvoc_logo.png",
+                    x: undefined,
+                    y: undefined,
+                    height: 48,
+                    width: 48,
+                    excavate: true,
+                  }}
+                />
               </div>
 
               <div className="text-center w-full bg-slate-50 py-3 rounded-xl border border-slate-100">
