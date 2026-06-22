@@ -34,7 +34,9 @@ interface SimpleMember {
   photoURL?: string;
   bloodType?: string;
   vehiclePlate?: string;
+  points?: number;
 }
+
 
 interface MemberDirectoryProps {
   currentUserId?: string;
@@ -47,6 +49,30 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<SimpleMember | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'leaders'>('all');
+
+  const getAdminBadge = (member: SimpleMember) => {
+    const isLeader = member.role === 'admin' || member.role === 'super_admin';
+    if (!isLeader) return null;
+    
+    const xp = member.points || 0;
+    if (xp >= 600) {
+      return {
+        label: 'Gold Admin',
+        colorClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+      };
+    } else if (xp >= 200) {
+      return {
+        label: 'Silver Admin',
+        colorClass: 'bg-slate-400/15 text-slate-300 border-slate-400/20 shadow-[0_0_8px_rgba(148,163,184,0.2)]'
+      };
+    } else {
+      return {
+        label: 'Bronze Admin',
+        colorClass: 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[0_0_8px_rgba(234,88,12,0.15)]'
+      };
+    }
+  };
+
 
   const [selectedChapter, setSelectedChapter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,7 +125,8 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
           role: displayedRole,
           managedChapter: data.managedChapter,
           photoURL: data.photoURL,
-          bloodType: data.bloodType
+          bloodType: data.bloodType,
+          points: data.points || 0
         });
       });
 
@@ -297,6 +324,16 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                         Leader
                       </span>
                     )}
+                    {(() => {
+                      const badgeData = getAdminBadge(member);
+                      if (!badgeData) return null;
+                      return (
+                        <span className={`shrink-0 border text-[7px] font-black uppercase tracking-wider px-1 py-0.2 rounded leading-none select-none ${badgeData.colorClass}`}>
+                          {badgeData.label}
+                        </span>
+                      );
+                    })()}
+
 
                     <span className="text-slate-500 text-xs hidden xs:inline opacity-75">•</span>
                     
@@ -458,6 +495,16 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                         ★ OFFICIAL PATCH
                       </span>
                     )}
+                    {(() => {
+                      const badgeData = getAdminBadge(selectedMember);
+                      if (!badgeData) return null;
+                      return (
+                        <span className={`inline-flex items-center border font-black text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-md select-none font-sans shadow-md ${badgeData.colorClass}`}>
+                          ★ {badgeData.label}
+                        </span>
+                      );
+                    })()}
+
                   </div>
                   <p className="text-xs text-slate-400 font-bold mt-0.5 font-mono">MVOC Member ID: {selectedMember.mvocId}</p>
                   {selectedMember.mvocId && selectedMember.mvocId.toUpperCase() === 'MVOC-0001' && (

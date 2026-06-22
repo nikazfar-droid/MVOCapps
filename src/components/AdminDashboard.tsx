@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Trash2, 
@@ -20,14 +20,19 @@ import {
   QrCode,
   BarChart3,
   Users,
-  ExternalLink
+  ExternalLink,
+  Trophy,
+  Gift,
+  Award,
+  Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, writeBatch, collection, getDocs, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { SyncedUserProfile, formatMvocId, forceSyncAllUsers } from '../lib/fetchAndSyncData';
+import { SyncedUserProfile, formatMvocId, forceSyncAllUsers, calculateEffectiveXP } from '../lib/fetchAndSyncData';
 import ChapterAnalytics from './ChapterAnalytics';
 import QREventScanner from './QREventScanner';
+
 
 const MASTER_ADMIN_ID = 'MVOC-0001';
 const MASTER_EMAIL = 'nikazfar@gmail.com';
@@ -155,12 +160,191 @@ export default function AdminDashboard({
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newMvocDigits, setNewMvocDigits] = useState('');
-  const [newChapter, setNewChapter] = useState('Zone Klang Valley');
+  const [newChapter, setNewChapter] = useState('Selangor Chapter');
   const [newTier, setNewTier] = useState<'GOLD' | 'STANDARD'>('STANDARD');
   const [newRole, setNewRole] = useState<'super_admin' | 'admin' | 'member'>('member');
   const [membersCurrentPage, setMembersCurrentPage] = useState(1);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'analytics'>('directory');
+  const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'analytics' | 'leaderboard' | 'rewards' | 'scouts'>('directory');
+  const [adminLeaderboard, setAdminLeaderboard] = useState<any[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [redemptionsList, setRedemptionsList] = useState<any[]>([]);
+  const [loadingRedemptions, setLoadingRedemptions] = useState(false);
+  const [isRedeemConfirmOpen, setIsRedeemConfirmOpen] = useState(false);
+  const [selectedReward, setSelectedReward] = useState<{ id: number; name: string; cost: number } | null>(null);
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [merchantsList, setMerchantsList] = useState<any[]>([]);
+  const [loadingMerchants, setLoadingMerchants] = useState(false);
+  const [isApprovingMerchant, setIsApprovingMerchant] = useState<string | null>(null);
+
+  const currentAdminUser = membersList.find(u => u.email.toLowerCase() === displayEmail.toLowerCase());
+
+  const fetchAdminLeaderboard = async () => {
+    setLoadingLeaderboard(true);
+    try {
+      const eventsSnap = await getDocs(collection(db, 'events'));
+      const convoysSnap = await getDocs(collection(db, 'convoys'));
+      
+      const eventCounts: Record<string, number> = {};
+      const convoyCounts: Record<string, number> = {};
+      
+      eventsSnap.forEach(d => {
+        const data = d.data();
+        const creator = data.createdBy || data.creatorId;
+        if (creator) {
+          eventCounts[creator] = (eventCounts[creator] || 0) + 1;
+        }
+      });
+      
+      convoysSnap.forEach(d => {
+        const data = d.data();
+        const creator = data.createdBy || data.creatorId;
+        if (creator) {
+          convoyCounts[creator] = (convoyCounts[creator] || 0) + 1;
+        }
+      });
+      
+      const admins = membersList.filter(u => u.role === 'admin' || u.role === 'super_admin');
+      const leaderboardData = admins.map(adm => {
+        const evCount = eventCounts[adm.uid] || 0;
+        const cvCount = convoyCounts[adm.uid] || 0;
+        return {
+          ...adm,
+          eventsCreated: evCount,
+          convoysCreated: cvCount,
+          totalOrganized: evCount + cvCount
+        };
+      });
+      
+      leaderboardData.sort((a, b) => b.totalOrganized - a.totalOrganized);
+      setAdminLeaderboard(leaderboardData);
+    } catch (err) {
+      console.error("Error loading admin leaderboard:", err);
+    } finally {
+      setLoadingLeaderboard(false);
+    }
+  };
+
+  const fetchRedemptions = async () => {
+    if (!currentAdminUser) return;
+    setLoadingRedemptions(true);
+    try {
+      const redSnap = await getDocs(collection(db, 'redemptions'));
+      const list: any[] = [];
+      redSnap.forEach(d => {
+        const data = d.data();
+        if (data.userId === currentAdminUser.uid) {
+          list.push({ id: d.id, ...data });
+        }
+      });
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setRedemptionsList(list);
+    } catch (err) {
+      console.error("Error loading redemptions:", err);
+    } finally {
+      setLoadingRedemptions(false);
+    }
+  };
+
+  const fetchMerchants = async () => {
+    setLoadingMerchants(true);
+    try {
+      const snap = await getDocs(collection(db, 'merchants'));
+      const list: any[] = [];
+      snap.forEach(d => {
+        list.push({ id: d.id, ...d.data() });
+      });
+      list.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+        return bTime - aTime;
+      });
+      setMerchantsList(list);
+    } catch (err) {
+      console.error("Error loading merchants:", err);
+    } finally {
+      setLoadingMerchants(false);
+    }
+  };
+
+  const handleApproveMerchant = async (merchantId: string, registeredByAdminId: string) => {
+    setIsApprovingMerchant(merchantId);
+    try {
+      await updateDoc(doc(db, 'merchants', merchantId), { status: 'active' });
+
+      if (registeredByAdminId && registeredByAdminId !== 'system') {
+        const userRef = doc(db, 'users', registeredByAdminId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const currentPoints = userSnap.data().points || 0;
+          const nextPoints = currentPoints + 500;
+          await updateDoc(userRef, { points: nextPoints });
+          triggerToast(`Merchant verified! 500 XP awarded to ${userSnap.data().name || 'recruiter'}.`, 'success');
+        } else {
+          triggerToast('Merchant verified, but recruiter user ID not found in database.', 'warning');
+        }
+      } else {
+        triggerToast('Merchant verified successfully.', 'success');
+      }
+      
+      await fetchMerchants();
+      await fetchFirestoreUsers();
+    } catch (err: any) {
+      triggerToast(`Failed to approve merchant: ${err.message || String(err)}`, 'error');
+    } finally {
+      setIsApprovingMerchant(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeAdminTab === 'leaderboard') {
+      fetchAdminLeaderboard();
+    } else if (activeAdminTab === 'rewards') {
+      fetchRedemptions();
+    } else if (activeAdminTab === 'scouts') {
+      fetchMerchants();
+    }
+  }, [activeAdminTab, membersList]);
+
+  const handleConfirmRedemption = async () => {
+    if (!currentAdminUser || !selectedReward) return;
+    setIsRedeeming(true);
+    try {
+      const userRef = doc(db, 'users', currentAdminUser.uid);
+      const nextPoints = (currentAdminUser.points || 0) - selectedReward.cost;
+      
+      // Update points in users collection
+      await updateDoc(userRef, { points: nextPoints });
+      
+      // Log to redemptions collection
+      await addDoc(collection(db, 'redemptions'), {
+        userId: currentAdminUser.uid,
+        userName: currentAdminUser.name,
+        userEmail: currentAdminUser.email,
+        mvocId: currentAdminUser.mvocId,
+        rewardId: selectedReward.id,
+        rewardName: selectedReward.name,
+        xpDeducted: selectedReward.cost,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      });
+      
+      triggerToast(`Berjaya menebus "${selectedReward.name}"! (-${selectedReward.cost} XP)`, 'success');
+      
+      setIsRedeemConfirmOpen(false);
+      setSelectedReward(null);
+      
+      // Refresh the directory list of users to sync locally
+      await fetchFirestoreUsers();
+      await fetchRedemptions();
+    } catch (err: any) {
+      triggerToast(`Gagal menebus ganjaran: ${err.message || String(err)}`, 'error');
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
+
 
 
   const handleForceSync = async () => {
@@ -278,8 +462,6 @@ export default function AdminDashboard({
 
   const adminList = filteredUsers.filter(u => u.role === 'super_admin' || u.role === 'admin');
   const memberList = filteredUsers.filter(u => u.role === 'member' || (!['super_admin', 'admin'].includes(u.role)));
-
-  const currentAdminUser = membersList.find(u => u.email.toLowerCase() === displayEmail.toLowerCase());
   
   const currentAdminChapters: string[] = useMemo(() => {
     if (!currentAdminUser) return [];
@@ -291,6 +473,27 @@ export default function AdminDashboard({
     }
     return currentAdminUser.chapter ? [currentAdminUser.chapter] : [];
   }, [currentAdminUser]);
+
+  const merchantScoutsLeaderboard = useMemo(() => {
+    const scoutCounts: Record<string, number> = {};
+    merchantsList.forEach(m => {
+      if (m.status === 'active' && m.registered_by_admin_id) {
+        scoutCounts[m.registered_by_admin_id] = (scoutCounts[m.registered_by_admin_id] || 0) + 1;
+      }
+    });
+
+    const admins = membersList.filter(u => u.role === 'admin' || u.role === 'super_admin');
+    const leaderboard = admins.map(adm => {
+      const count = scoutCounts[adm.uid] || 0;
+      return {
+        ...adm,
+        merchantsScouted: count
+      };
+    });
+
+    leaderboard.sort((a, b) => b.merchantsScouted - a.merchantsScouted);
+    return leaderboard;
+  }, [merchantsList, membersList]);
   
   const pendingMembersList = membersList.filter(u => 
     u.status === 'pending' && 
@@ -333,7 +536,7 @@ export default function AdminDashboard({
       setNewName('');
       setNewEmail('');
       setNewMvocDigits('');
-      setNewChapter('Zone Klang Valley');
+      setNewChapter('Selangor Chapter');
       setNewTier('STANDARD');
       setNewRole('member');
       setIsAddModalOpen(false);
@@ -800,13 +1003,526 @@ export default function AdminDashboard({
 
 
 
-      {activeAdminTab === 'analytics' ? (
+      {/* Sub-tab Navigation Bar */}
+      <div className="flex flex-wrap bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/80 shadow-sm max-w-3xl gap-1">
+        <button
+          onClick={() => setActiveAdminTab('directory')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-black rounded-xl transition-all cursor-pointer min-w-[120px] ${
+            activeAdminTab === 'directory'
+              ? 'bg-[#0f2d52] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>User Directory</span>
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('analytics')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-black rounded-xl transition-all cursor-pointer min-w-[120px] ${
+            activeAdminTab === 'analytics'
+              ? 'bg-[#0f2d52] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>Chapter Analytics</span>
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('leaderboard')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-black rounded-xl transition-all cursor-pointer min-w-[120px] ${
+            activeAdminTab === 'leaderboard'
+              ? 'bg-[#0f2d52] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Trophy className="w-4 h-4" />
+          <span>Admin Leaderboard</span>
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('rewards')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-black rounded-xl transition-all cursor-pointer min-w-[120px] ${
+            activeAdminTab === 'rewards'
+              ? 'bg-[#0f2d52] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Gift className="w-4 h-4" />
+          <span>Admin Rewards</span>
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('scouts')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-black rounded-xl transition-all cursor-pointer min-w-[120px] ${
+            activeAdminTab === 'scouts'
+              ? 'bg-[#0f2d52] text-white shadow-md'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Store className="w-4 h-4" />
+          <span>Merchant Scouts</span>
+        </button>
+      </div>
+
+      {activeAdminTab === 'analytics' && (
         <ChapterAnalytics 
           members={membersList} 
           chapter={currentAdminChapters} 
         />
-      ) : (
+      )}
+
+      {activeAdminTab === 'leaderboard' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Card */}
+          <div className="bg-[#0f2d52] p-6 rounded-3xl text-white shadow-md relative overflow-hidden border border-white/10">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-48 h-48 bg-amber-400 rounded-full mix-blend-multiply filter blur-[60px] opacity-25"></div>
+            <div className="relative z-10 space-y-1">
+              <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest">Prestasi & Pengaruh Pentadbir</h3>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Admin Leaderboard</h2>
+              <p className="text-xs md:text-sm text-slate-200 font-semibold max-w-2xl leading-normal">
+                Senarai ranking admin mengikut jumlah acara (Events & Convoys) rasmi yang telah dianjurkan di bawah sistem MVOC.
+              </p>
+            </div>
+          </div>
+
+          {/* Top 3 Trophies Grid */}
+          {!loadingLeaderboard && adminLeaderboard.length >= 3 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+              {/* Rank 2 (Second Place) */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-center flex flex-col justify-between items-center relative order-2 md:order-1">
+                <div className="absolute top-3 left-3 bg-slate-100 text-slate-700 w-6 h-6 rounded-full font-black text-xs flex items-center justify-center border border-slate-200">2</div>
+                <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-slate-300 shadow-md mb-3">
+                  <img src={adminLeaderboard[1].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[1].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">Silver Organizer</h4>
+                  <h3 className="font-black text-sm text-[#0b1c30] mt-0.5">{adminLeaderboard[1].name}</h3>
+                  <span className="text-[10px] text-slate-400 font-bold font-mono tracking-tight block mt-0.5">{adminLeaderboard[1].mvocId}</span>
+                </div>
+                <div className="mt-4 bg-slate-105 border border-slate-200 text-slate-750 px-4 py-2 rounded-2xl flex items-center gap-1.5 shadow-inner">
+                  <Trophy className="w-4 h-4 text-slate-400" />
+                  <span className="font-black text-base font-mono">{adminLeaderboard[1].totalOrganized}</span>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase">Organized</span>
+                </div>
+              </div>
+
+              {/* Rank 1 (Winner) */}
+              <div className="bg-gradient-to-b from-amber-50 to-white border-2 border-amber-300 rounded-3xl p-6 shadow-md text-center flex flex-col justify-between items-center relative order-1 md:order-2 scale-105">
+                <div className="absolute -top-4 bg-amber-400 text-[#0f2d52] w-8 h-8 rounded-full font-black text-sm flex items-center justify-center border-2 border-white shadow-md animate-bounce">1</div>
+                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-amber-400 shadow-md mb-3 mt-2">
+                  <img src={adminLeaderboard[0].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[0].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                </div>
+                <div>
+                  <h4 className="font-black text-xs text-amber-700 uppercase tracking-widest flex items-center gap-1 justify-center">
+                    <Trophy className="w-3.5 h-3.5 fill-amber-500 text-amber-600" /> Gold Organizer
+                  </h4>
+                  <h3 className="font-black text-base text-[#0b1c30] mt-0.5">{adminLeaderboard[0].name}</h3>
+                  <span className="text-[10px] text-amber-600 font-bold font-mono tracking-tight block mt-0.5">{adminLeaderboard[0].mvocId}</span>
+                </div>
+                <div className="mt-4 bg-amber-400 text-[#0f2d52] px-6 py-2 rounded-2xl flex items-center gap-1.5 shadow-md">
+                  <Trophy className="w-4.5 h-4.5 fill-[#0f2d52] text-[#0f2d52]" />
+                  <span className="font-black text-lg font-mono">{adminLeaderboard[0].totalOrganized}</span>
+                  <span className="text-[9px] font-black uppercase">Organized</span>
+                </div>
+              </div>
+
+              {/* Rank 3 (Third Place) */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-center flex flex-col justify-between items-center relative order-3 md:order-3">
+                <div className="absolute top-3 left-3 bg-[#fdf6f0] text-[#8c521f] w-6 h-6 rounded-full font-black text-xs flex items-center justify-center border border-orange-200">3</div>
+                <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-orange-200 shadow-md mb-3">
+                  <img src={adminLeaderboard[2].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[2].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-xs text-orange-700 uppercase tracking-wider">Bronze Organizer</h4>
+                  <h3 className="font-black text-sm text-[#0b1c30] mt-0.5">{adminLeaderboard[2].name}</h3>
+                  <span className="text-[10px] text-slate-400 font-bold font-mono tracking-tight block mt-0.5">{adminLeaderboard[2].mvocId}</span>
+                </div>
+                <div className="mt-4 bg-orange-50 border border-orange-100 text-orange-800 px-4 py-2 rounded-2xl flex items-center gap-1.5 shadow-inner">
+                  <Trophy className="w-4 h-4 text-orange-400 animate-pulse" />
+                  <span className="font-black text-base font-mono">{adminLeaderboard[2].totalOrganized}</span>
+                  <span className="text-[9px] font-bold text-orange-700 uppercase">Organized</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Full Leaderboard Table */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-6">
+            <h3 className="text-[#0f2d52] font-black text-base uppercase tracking-tight flex items-center gap-2 mb-4">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              Administrative Rankings Board
+            </h3>
+            
+            {loadingLeaderboard ? (
+              <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                <div className="w-8 h-8 rounded-full border-4 border-slate-100 border-t-amber-500 animate-spin" />
+                <p className="text-xs text-slate-400 font-bold">Mengira statistik anjuran pentadbir...</p>
+              </div>
+            ) : adminLeaderboard.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200/50">
+                <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">Tiada Rekod Dijumpai</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse min-w-[640px]">
+                  <thead>
+                    <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none text-[10px] font-extrabold uppercase tracking-widest">
+                      <th className="py-1 px-4 text-center w-[8%]">Rank</th>
+                      <th className="py-1 px-3 w-[30%]">Administrator</th>
+                      <th className="py-1 px-3 w-[20%]">Chapter</th>
+                      <th className="py-1 px-3 text-center w-[12%]">Events</th>
+                      <th className="py-1 px-3 text-center w-[12%]">Convoys</th>
+                      <th className="py-1 px-4 text-right w-[18%]">Total Organized</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-800">
+                    {adminLeaderboard.map((adm, idx) => {
+                      const points = adm.points || 0;
+                      const adminBadge = points >= 600 ? 'Gold' : points >= 200 ? 'Silver' : 'Bronze';
+                      return (
+                        <tr key={adm.uid} className={`hover:bg-[#f8f9ff]/50 transition-colors h-[46px] ${idx < 3 ? 'bg-[#fbfcfe]/30' : ''}`}>
+                          <td className="py-1 px-4 text-center">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black font-mono ${
+                              idx === 0 ? 'bg-amber-400 text-[#0f2d52] border border-amber-300' :
+                              idx === 1 ? 'bg-slate-200 text-slate-800 border border-slate-300' :
+                              idx === 2 ? 'bg-[#fdf6f0] text-orange-850 border border-orange-200' :
+                              'text-slate-505'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                          </td>
+                          <td className="py-1 px-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                                <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adm.name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[#0b1c30] text-xs font-black truncate max-w-[150px]">{adm.name}</span>
+                                  <span className={`text-[7px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded leading-none select-none border ${
+                                    adminBadge === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                    adminBadge === 'Silver' ? 'bg-slate-550 text-slate-700 border-slate-300' :
+                                    'bg-orange-50 text-orange-800 border-orange-200'
+                                  }`}>
+                                    {adminBadge} Badge
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-mono font-bold tracking-tight block">{adm.mvocId}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-1 px-3 text-slate-500 font-medium">
+                            {adm.chapter || 'National'}
+                          </td>
+                          <td className="py-1 px-3 text-center font-mono text-slate-650">
+                            {adm.eventsCreated}
+                          </td>
+                          <td className="py-1 px-3 text-center font-mono text-slate-650">
+                            {adm.convoysCreated}
+                          </td>
+                          <td className="py-1 px-4 text-right pr-6">
+                            <span className="inline-flex items-center justify-center px-3 py-1 bg-[#eff4ff] border border-blue-150 rounded-xl font-black font-mono text-sm text-[#0f2d52] shadow-sm">
+                              {adm.totalOrganized}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeAdminTab === 'rewards' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Panel */}
+          <div className="bg-[#0f2d52] p-6 rounded-3xl text-white shadow-md relative overflow-hidden border border-white/10">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-48 h-48 bg-emerald-400 rounded-full mix-blend-multiply filter blur-[60px] opacity-25"></div>
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-1">
+                <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest">Admin Excellence Rewards</h3>
+                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Ganjaran Pentadbir</h2>
+                <p className="text-xs md:text-sm text-slate-200 font-semibold max-w-2xl leading-normal">
+                  Tebus mata ganjaran XP (Points) yang anda perolehi daripada penganjuran acara dan konvoi rasmi dengan barangan eksklusif MVOC.
+                </p>
+              </div>
+              {currentAdminUser && (
+                <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[140px] text-center shadow-lg">
+                  <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">MATA AKTIF ANDA</span>
+                  <span className="text-3xl font-black text-emerald-400 font-mono tracking-tight mt-1">
+                    {currentAdminUser.points || 0}
+                  </span>
+                  <span className="text-[9px] text-slate-350 font-bold uppercase mt-1">XP Points</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Rewards Grid */}
+          <div className="space-y-4">
+            <h3 className="text-[#0f2d52] font-black text-base uppercase tracking-tight flex items-center gap-2">
+              <Gift className="w-5 h-5 text-emerald-500" />
+              Redeemable Items (Kedai Ganjaran Admin)
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { id: 1, name: 'Official MVOC Admin Polo Shirt', desc: 'Kemeja polo berkolar dry-fit eksklusif dengan sulaman logo MVOC Admin.', cost: 250, badge: 'Premium Wear' },
+                { id: 2, name: 'Gold Windshield Sticker', desc: 'Stiker cermin pantulan metallic emas eksklusif Toyota Veloz Owners Club.', cost: 120, badge: 'Decal' },
+                { id: 3, name: 'VIP Parking Pass at Next Mega Event', desc: 'Pas letak kenderaan keutamaan (VIP) di barisan hadapan semasa acara Mega kelab.', cost: 180, badge: 'Privilege' },
+                { id: 4, name: 'Custom Admin Name Badge', desc: 'Lencana nama akrilik dengan pin magnetik terukir nama kustom anda.', cost: 80, badge: 'Accessory' },
+                { id: 5, name: 'Petrol E-Voucher RM50', desc: 'E-voucher Petronas/Shell bernilai RM50 yang boleh digunakan terus di aplikasi rasmi.', cost: 500, badge: 'Voucher' }
+              ].map(item => {
+                const points = currentAdminUser?.points || 0;
+                const canRedeem = points >= item.cost;
+                return (
+                  <div key={item.id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between gap-4 relative overflow-hidden group">
+                    <div className="space-y-2">
+                      <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-100 text-[8px] font-black uppercase px-2 py-0.5 rounded-full select-none">{item.badge}</span>
+                      <h4 className="font-black text-sm text-[#0b1c30] group-hover:text-indigo-650 transition-colors">{item.name}</h4>
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">{item.desc}</p>
+                    </div>
+                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">KOS PENEBUSAN</span>
+                        <span className="font-black text-sm text-[#0f2d52] font-mono">{item.cost} XP</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedReward(item);
+                          setIsRedeemConfirmOpen(true);
+                        }}
+                        disabled={!canRedeem}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                          canRedeem
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm cursor-pointer hover:scale-105 active:scale-95'
+                            : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                        }`}
+                      >
+                        {canRedeem ? 'Tebus' : 'XP Tidak Cukup'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Redemption History */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 md:p-6">
+            <h3 className="text-[#0f2d52] font-black text-base uppercase tracking-tight flex items-center gap-2 mb-4">
+              <RefreshCw className="w-4.5 h-4.5 text-indigo-500" />
+              Personal Redemption History (Sejarah Penebusan)
+            </h3>
+
+            {loadingRedemptions ? (
+              <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                <div className="w-6 h-6 rounded-full border-4 border-slate-150 border-t-indigo-500 animate-spin" />
+                <p className="text-xs text-slate-400 font-bold">Memuat turun sejarah penebusan...</p>
+              </div>
+            ) : redemptionsList.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200/50">
+                <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">Tiada Sejarah Penebusan</p>
+                <p className="text-[10px] text-slate-500 mt-1">Anda belum menebus sebarang ganjaran setakat ini.</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none text-[10px] font-extrabold uppercase tracking-widest">
+                      <th className="py-1 px-4 w-[40%]">Ganjaran (Item Name)</th>
+                      <th className="py-1 px-3 text-center w-[15%]">XP Tebus</th>
+                      <th className="py-1 px-3 w-[25%]">Tarikh Tebus (Date)</th>
+                      <th className="py-1 px-4 text-right w-[20%]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-800">
+                    {redemptionsList.map(red => (
+                      <tr key={red.id} className="hover:bg-slate-50/50 transition-colors h-[40px]">
+                        <td className="py-1 px-4 text-[#0b1c30]">{red.rewardName}</td>
+                        <td className="py-1 px-3 text-center font-mono text-[#0f2d52]">{red.xpDeducted} XP</td>
+                        <td className="py-1 px-3 text-slate-500 font-medium">
+                          {new Date(red.timestamp).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="py-1 px-4 text-right pr-6">
+                          <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                            red.status === 'fulfilled'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : 'bg-amber-50 text-amber-700 border border-amber-250 animate-pulse'
+                          }`}>
+                            {red.status === 'fulfilled' ? 'Selesai / Fulfilled' : 'Menunggu / Pending'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeAdminTab === 'scouts' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Panel */}
+          <div className="bg-[#0f2d52] p-6 rounded-3xl text-white shadow-md relative overflow-hidden border border-white/10">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-48 h-48 bg-amber-400 rounded-full mix-blend-multiply filter blur-[60px] opacity-25"></div>
+            <div className="relative z-10 space-y-1 text-left">
+              <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest">Penganalisaan & Pengesahan Rakan Niaga</h3>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Merchant Scouts</h2>
+              <p className="text-xs md:text-sm text-slate-200 font-semibold max-w-2xl leading-normal">
+                Urus dan sahkan rakan strategik (Merchant Partners) yang didaftarkan oleh admin serta lihat prestasi perekrutan.
+              </p>
+            </div>
+          </div>
+
+          {/* Top Merchant Scouts Leaderboard */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm">
+            <h3 className="text-[#0f2d52] font-black text-base uppercase tracking-tight flex items-center gap-2 mb-4">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              Top Merchant Scouts Leaderboard
+            </h3>
+            
+            {merchantScoutsLeaderboard.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 font-bold text-xs">Tiada data admin tersedia.</div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none text-[10px] font-extrabold uppercase tracking-widest">
+                      <th className="py-1 px-4 w-[10%] text-center font-black">Kedudukan</th>
+                      <th className="py-1 px-4 w-[40%] font-black">Nama Admin</th>
+                      <th className="py-1 px-3 w-[25%] font-black">MVOC ID</th>
+                      <th className="py-1 px-4 text-right w-[25%] pr-6 font-black">Jumlah Merchant Scouted</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-800">
+                    {merchantScoutsLeaderboard.map((adm, index) => {
+                      const isTop3 = index < 3;
+                      const trophyColors = ["text-amber-500 fill-amber-500", "text-slate-400 fill-slate-300", "text-orange-500 fill-orange-400"];
+                      return (
+                        <tr key={adm.uid} className="hover:bg-slate-50/50 transition-colors h-[44px]">
+                          <td className="py-1 px-4 text-center">
+                            {isTop3 ? (
+                              <div className="flex items-center justify-center">
+                                <Trophy className={`w-4 h-4 ${trophyColors[index]}`} />
+                              </div>
+                            ) : (
+                              index + 1
+                            )}
+                          </td>
+                          <td className="py-1 px-4 flex items-center gap-2.5 h-[44px]">
+                            <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
+                            <span className="text-[#0b1c30]">{adm.name}</span>
+                          </td>
+                          <td className="py-1 px-3 text-slate-500 font-mono font-bold">{adm.mvocId || 'N/A'}</td>
+                          <td className="py-1 px-4 text-right pr-8 font-mono text-[#0f2d52] font-black text-sm">
+                            {adm.merchantsScouted}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Scouted Merchants List & Verification */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm">
+            <h3 className="text-[#0f2d52] font-black text-base uppercase tracking-tight flex items-center gap-2 mb-4">
+              <Store className="w-5 h-5 text-indigo-500" />
+              Scouted Merchants & Verification Requests
+            </h3>
+            
+            {loadingMerchants ? (
+              <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                <div className="w-6 h-6 rounded-full border-4 border-slate-150 border-t-[#0f2d52] animate-spin" />
+                <p className="text-xs text-slate-400 font-bold">Memuat turun data Merchant...</p>
+              </div>
+            ) : merchantsList.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200/50">
+                <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">Tiada Merchant Terdaftar</p>
+                <p className="text-[10px] text-slate-500 mt-1">Belum ada sebarang Merchant didaftarkan melalui database.</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse font-sans">
+                  <thead>
+                    <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none text-[10px] font-extrabold uppercase tracking-widest">
+                      <th className="py-1 px-4 w-[30%] font-black">Nama Rakan Niaga (Merchant)</th>
+                      <th className="py-1 px-3 w-[20%] font-black">Kategori</th>
+                      <th className="py-1 px-3 w-[25%] font-black">Didaftarkan Oleh (Scout)</th>
+                      <th className="py-1 px-3 w-[12%] text-center font-black">Status</th>
+                      <th className="py-1 px-4 text-right w-[13%] font-black">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-800">
+                    {merchantsList.map(m => {
+                      const isPending = m.status === 'pending';
+                      const isApproving = isApprovingMerchant === m.id;
+                      return (
+                        <tr key={m.id} className="hover:bg-slate-50/50 transition-colors h-[48px]">
+                          <td className="py-1 px-4 text-left">
+                            <div className="flex flex-col">
+                              <span className="text-[#0b1c30]">{m.name}</span>
+                              <span className="text-[9px] text-slate-400 font-medium font-mono">{m.id}</span>
+                            </div>
+                          </td>
+                          <td className="py-1 px-3 text-slate-650 font-medium uppercase text-[10px] text-left">{m.category}</td>
+                          <td className="py-1 px-3 text-left">
+                            <div className="flex flex-col">
+                              <span className="text-slate-700 font-bold">{m.registered_by_admin_name || 'System / Default'}</span>
+                              {m.registered_by_admin_id && m.registered_by_admin_id !== 'system' && (
+                                <span className="text-[9px] text-slate-400 font-mono font-medium">{m.registered_by_admin_id}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1 px-3 text-center">
+                            <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                              isPending
+                                ? 'bg-amber-50 text-amber-700 border border-amber-250 animate-pulse'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            }`}>
+                              {isPending ? 'Pending' : 'Active'}
+                            </span>
+                          </td>
+                          <td className="py-1 px-4 text-right pr-6">
+                            {isPending ? (
+                              currentUserRole === 'super_admin' ? (
+                                <button
+                                  onClick={() => handleApproveMerchant(m.id, m.registered_by_admin_id)}
+                                  disabled={isApproving}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition active:scale-95 shadow-3xs cursor-pointer disabled:opacity-50"
+                                >
+                                  {isApproving ? 'Approving...' : 'Verify & +500 XP'}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic font-semibold">Super Admin Only</span>
+                              )
+                            ) : (
+                              <div className="flex items-center justify-end gap-1 text-emerald-600">
+                                <Check className="w-4 h-4" />
+                                <span className="text-[10px] uppercase font-black tracking-wider">Verified</span>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeAdminTab === 'directory' && (
         <>
+
           {/* STATISTICS PANELS */}
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-xs flex flex-col justify-between group hover:border-[#adc8f5]/65 transition-all">
@@ -1046,7 +1762,7 @@ export default function AdminDashboard({
           </div>
         </div>
       </section>
-      </>
+        </>
       )}
 
       {/* SAFELY GUARDRAIL CONFIRMATION MODAL */}
@@ -1739,6 +2455,65 @@ export default function AdminDashboard({
                 </div>
 
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* REDEMPTION CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {isRedeemConfirmOpen && selectedReward && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl p-6 text-left"
+            >
+              <div className="flex items-center gap-3 text-emerald-600 mb-4 animate-bounce">
+                <Gift className="w-8 h-8 text-emerald-500" />
+                <div>
+                  <h4 className="text-sm font-black text-[#001835] uppercase tracking-wider">Confirm Redemption</h4>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">Admin Rewards Shop</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 py-2 text-xs font-semibold text-slate-700 leading-relaxed">
+                <p>
+                  Adakah anda pasti mahu menebus <strong>{selectedReward.name}</strong> dengan kos sebanyak <strong>{selectedReward.cost} XP</strong>?
+                </p>
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-emerald-650 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-emerald-800 leading-normal font-bold">
+                    Mata ganjaran anda akan ditolak sebanyak {selectedReward.cost} XP secara langsung di dalam pangkalan data.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-100 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRedeemConfirmOpen(false);
+                    setSelectedReward(null);
+                  }}
+                  className="w-1/2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 font-bold text-xs h-11 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRedemption}
+                  disabled={isRedeeming}
+                  className="w-1/2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-xs h-11 rounded-xl transition flex items-center justify-center gap-1.5 uppercase tracking-wider shadow-sm cursor-pointer"
+                >
+                  {isRedeeming ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    'Sahkan Tebus'
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

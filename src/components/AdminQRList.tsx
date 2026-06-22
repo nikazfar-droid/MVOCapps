@@ -4,6 +4,8 @@ import { X, Calendar, MapPin, Link as LinkIcon, Download, Plus, QrCode, AlertTri
 import { QRCodeSVG } from 'qrcode.react';
 import { db, auth } from '../lib/firebase';
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, Timestamp, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { calculateEffectiveXP } from '../lib/fetchAndSyncData';
+
 
 interface AdminQRListProps {
   onClose: () => void;
@@ -337,7 +339,10 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           limit: 100,
           status: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
+          createdAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid || null,
+          creatorId: auth.currentUser?.uid || null,
+          chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       } else if (selectedType === 'convoys') {
@@ -348,7 +353,10 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           status: 'OPEN',
           status_qr: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
+          createdAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid || null,
+          creatorId: auth.currentUser?.uid || null,
+          chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       } else if (selectedType === 'attendance') {
@@ -357,12 +365,79 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           subtitle: `Created on ${new Date().toLocaleDateString()}`,
           status: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
+          createdAt: new Date().toISOString(),
+          createdBy: auth.currentUser?.uid || null,
+          chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       }
 
-      triggerToast(`Successfully initialized and synced "${targetTitle}" QR!`, 'success');
+      if (auth.currentUser?.uid) {
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          last_event_created_date: new Date().toISOString()
+        });
+      }
+
+      // Award Admin XP
+      const adminUid = auth.currentUser?.uid;
+      let actualXpAwarded = 0;
+      let wasAwarded = false;
+
+      if (adminUid && (selectedType === 'events' || selectedType === 'convoys')) {
+        const titleLower = targetTitle.toLowerCase();
+        const isVolunteer = titleLower.includes('sukarelawan') || titleLower.includes('volunteer');
+        const isMajorEvent = titleLower.includes('major') || titleLower.includes('ajk');
+        
+        let memberXp = 10;
+        if (isVolunteer) memberXp = 100;
+        else if (isMajorEvent) memberXp = 50;
+        
+        const xpToAward = memberXp * 2; // 2x multiplier
+        
+        try {
+          const adminUserRef = doc(db, 'users', adminUid);
+          const adminUserSnap = await getDoc(adminUserRef);
+          if (adminUserSnap.exists()) {
+            const userData = adminUserSnap.data();
+            const effectiveData = calculateEffectiveXP(userData);
+            let currentXP = effectiveData.effectiveXP;
+            
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            
+            const monthlyXpMap = userData.monthlyXp || {};
+            const currentMonthXp = monthlyXpMap[currentMonth] || 0;
+            
+            if (currentMonthXp < 500) {
+              actualXpAwarded = Math.min(xpToAward, 500 - currentMonthXp);
+            }
+            
+            currentXP += actualXpAwarded;
+            monthlyXpMap[currentMonth] = currentMonthXp + actualXpAwarded;
+            
+            const updates: any = {
+              points: currentXP,
+              lastActivityDate: now.toISOString(),
+              monthlyXp: monthlyXpMap
+            };
+            
+            await updateDoc(adminUserRef, updates);
+            wasAwarded = true;
+            console.log(`[DEBUG] Awarded ${actualXpAwarded} XP to admin ${adminUid} for event/convoy creation.`);
+          }
+        } catch (xpErr) {
+          console.error('[ERROR] Failed to award admin XP:', xpErr);
+        }
+      }
+
+      if (wasAwarded && actualXpAwarded > 0) {
+        triggerToast(`Successfully initialized and synced "${targetTitle}" QR! (+${actualXpAwarded} XP Admin Multiplier)`, 'success');
+      } else if (wasAwarded && actualXpAwarded === 0 && (selectedType === 'events' || selectedType === 'convoys')) {
+        triggerToast(`Successfully initialized and synced "${targetTitle}" QR! (0 XP - Monthly 500 XP limit reached)`, 'info');
+      } else {
+        triggerToast(`Successfully initialized and synced "${targetTitle}" QR!`, 'success');
+      }
+
       setIsCreateModalOpen(false);
       setCustomQrName('');
       setSelectedItemId('');

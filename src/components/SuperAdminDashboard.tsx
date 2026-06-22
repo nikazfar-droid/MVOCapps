@@ -45,6 +45,53 @@ export default function SuperAdminDashboard({
   const [isRoleRequestsModalOpen, setIsRoleRequestsModalOpen] = useState(false);
   const [processingRoleUid, setProcessingRoleUid] = useState<string | null>(null);
 
+  const [isResettingInactivityUid, setIsResettingInactivityUid] = useState<string | null>(null);
+  const [isDemotingUid, setIsDemotingUid] = useState<string | null>(null);
+
+  const getInactivityInfo = (user: SyncedUserProfile) => {
+    const lastActivityStr = user.last_event_created_date || user.joinDate || null;
+    let daysInactive = 0;
+    if (lastActivityStr) {
+      const lastActivity = new Date(lastActivityStr);
+      daysInactive = Math.floor((new Date().getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    return { lastActivityStr, daysInactive };
+  };
+
+  const handleResetInactivity = async (user: SyncedUserProfile) => {
+    try {
+      setIsResettingInactivityUid(user.uid);
+      await updateDoc(doc(db, 'users', user.uid), {
+        last_event_created_date: new Date().toISOString()
+      });
+      triggerToast(`Berjaya menyahaktifkan tempoh tidak aktif bagi ${user.name}. Had masa keaktifan diset semula ke hari ini!`, 'success');
+      await fetchFirestoreUsers();
+    } catch (e: any) {
+      triggerToast(`Gagal set semula: ${e.message || String(e)}`, 'error');
+    } finally {
+      setIsResettingInactivityUid(null);
+    }
+  };
+
+  const handleDemoteAdmin = async (user: SyncedUserProfile) => {
+    if (!window.confirm(`Adakah anda pasti mahu melucutkan jawatan ADMIN bagi ${user.name} dan menukar peranannya kepada MEMBER segera?`)) {
+      return;
+    }
+    try {
+      setIsDemotingUid(user.uid);
+      await updateDoc(doc(db, 'users', user.uid), {
+        role: 'member',
+        roleRequest: null
+      });
+      triggerToast(`Jawatan admin bagi ${user.name} telah dilucutkan secara manual.`, 'success');
+      await fetchFirestoreUsers();
+    } catch (e: any) {
+      triggerToast(`Gagal melucutkan jawatan: ${e.message || String(e)}`, 'error');
+    } finally {
+      setIsDemotingUid(null);
+    }
+  };
+
   const deleteRequests = membersList.filter(u => u.requestDelete === true || u.status === 'delete_requested');
   const roleRequests = membersList.filter(u => u.roleRequest != null);
 
@@ -123,6 +170,14 @@ export default function SuperAdminDashboard({
       setProcessingDeleteUid(null);
     }
   };
+
+  const watchlistAdmins = membersList
+    .filter(u => u.role === 'admin')
+    .map(u => {
+      const { lastActivityStr, daysInactive } = getInactivityInfo(u);
+      return { ...u, lastActivityStr, daysInactive };
+    })
+    .sort((a, b) => b.daysInactive - a.daysInactive);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-24">
@@ -330,6 +385,112 @@ export default function SuperAdminDashboard({
                 MINTA AKSES
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Inactive Admin Watchlist Panel */}
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4 text-left">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-200">
+              <Users className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-[#0F2D52] uppercase tracking-wide">Inactive Admin Watchlist</h2>
+              <p className="text-xs font-semibold text-slate-500">Senarai admin yang dikesan tidak aktif dan hampir mencecah tempoh pelucutan jawatan</p>
+            </div>
+          </div>
+        </div>
+
+        {watchlistAdmins.length === 0 ? (
+          <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-150">
+            <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">Tiada Admin Dikesan</p>
+            <p className="text-[10px] text-slate-500 mt-1">Semua admin berdaftar aktif menganjurkan acara / convoy / merchant.</p>
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto rounded-2xl border border-slate-150">
+            <table className="w-full text-left border-collapse font-sans text-xs">
+              <thead>
+                <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none text-[10px] font-extrabold uppercase tracking-widest">
+                  <th className="py-1 px-4 w-[25%] font-black">Nama Admin</th>
+                  <th className="py-1 px-3 w-[25%] font-black">Email</th>
+                  <th className="py-1 px-3 w-[20%] font-black">Aktiviti Terakhir</th>
+                  <th className="py-1 px-3 text-center w-[15%] font-black">Inaktif (Hari)</th>
+                  <th className="py-1 px-4 text-right w-[15%] font-black">Tindakan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-800 font-bold">
+                {watchlistAdmins.map(adm => {
+                  const isResetting = isResettingInactivityUid === adm.uid;
+                  const isDemoting = isDemotingUid === adm.uid;
+                  
+                  let badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+                  let tierLabel = "Active";
+                  
+                  if (adm.daysInactive >= 90) {
+                    badgeStyle = "bg-rose-50 text-rose-700 border border-rose-200 animate-pulse";
+                    tierLabel = "Auto-Demotion Overdue";
+                  } else if (adm.daysInactive >= 60) {
+                    badgeStyle = "bg-rose-50 text-rose-700 border border-rose-100";
+                    tierLabel = "Critical (60+ Days)";
+                  } else if (adm.daysInactive >= 30) {
+                    badgeStyle = "bg-amber-50 text-amber-700 border border-amber-250";
+                    tierLabel = "Warning (30+ Days)";
+                  }
+
+                  return (
+                    <tr key={adm.uid} className="hover:bg-slate-50/50 transition-colors h-[48px]">
+                      <td className="py-1 px-4 text-left">
+                        <div className="flex items-center gap-2.5">
+                          <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
+                          <div className="flex flex-col">
+                            <span className="text-[#0b1c30]">{adm.name}</span>
+                            <span className="text-[9px] text-slate-400 font-mono font-medium">{adm.mvocId || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-1 px-3 text-slate-650 font-medium font-mono text-left">{adm.email}</td>
+                      <td className="py-1 px-3 text-slate-500 font-medium text-left">
+                        {adm.lastActivityStr ? (
+                          new Date(adm.lastActivityStr).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+                        ) : (
+                          'Tiada Rekod'
+                        )}
+                      </td>
+                      <td className="py-1 px-3 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="font-black text-sm font-mono text-slate-700">{adm.daysInactive} Hari</span>
+                          <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${badgeStyle}`}>
+                            {tierLabel}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-1 px-4 text-right pr-6">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleResetInactivity(adm)}
+                            disabled={isResetting || isDemoting}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-slate-200 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="Reset inactivity counter to 0 days"
+                          >
+                            {isResetting ? 'Resetting...' : 'Reset Counter'}
+                          </button>
+                          <button
+                            onClick={() => handleDemoteAdmin(adm)}
+                            disabled={isResetting || isDemoting}
+                            className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="Demote role to member immediately"
+                          >
+                            {isDemoting ? 'Demoting...' : 'Demote'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

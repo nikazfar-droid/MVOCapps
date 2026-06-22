@@ -1273,6 +1273,79 @@ function AppContent({
     sessionStorage.setItem('mvoc_currentTab', currentTab);
   }, [currentTab]);
 
+  // Self-demotion check for logged-in inactive admins
+  useEffect(() => {
+    if (!isLoggedIn || !auth.currentUser || !userProfile) return;
+    if (userProfile.role !== 'admin' && userProfile.role !== 'super_admin') return;
+
+    if (!userProfile.last_event_created_date) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userRef, { last_event_created_date: new Date().toISOString() }).catch(err => {
+        console.warn("Failed to initialize last_event_created_date:", err);
+      });
+      return;
+    }
+
+    const lastActivity = new Date(userProfile.last_event_created_date);
+    const diffTime = new Date().getTime() - lastActivity.getTime();
+    const daysInactive = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (daysInactive >= 90) {
+      const performSelfDemotion = async () => {
+        try {
+          const userRef = doc(db, 'users', auth.currentUser.uid);
+          await updateDoc(userRef, {
+            role: 'member',
+            roleRequest: null
+          });
+          triggerToast('Peranan ADMIN anda telah ditukarkan kepada MEMBER secara automatik kerana tidak aktif melebihi 90 hari.', 'warning');
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } catch (err) {
+          console.error("Self demotion failed:", err);
+        }
+      };
+      performSelfDemotion();
+    }
+  }, [userProfile, isLoggedIn]);
+
+  // Peer-demotion check for Super Admins
+  useEffect(() => {
+    if (!isLoggedIn || !isSuperAdmin || membersList.length === 0) return;
+
+    const runPeerDemotionCheck = async () => {
+      if (sessionStorage.getItem('mvoc_peer_demotion_checked') === 'true') return;
+      sessionStorage.setItem('mvoc_peer_demotion_checked', 'true');
+
+      const now = new Date();
+      const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+
+      for (const u of membersList) {
+        if (u.role === 'admin') {
+          const lastActivityStr = u.last_event_created_date || u.joinDate;
+          if (lastActivityStr) {
+            const lastActivity = new Date(lastActivityStr);
+            if (lastActivity < ninetyDaysAgo) {
+              console.log(`[AUTO-DEMOTION]: Demoting admin ${u.name} due to inactivity.`);
+              try {
+                await updateDoc(doc(db, 'users', u.uid), {
+                  role: 'member',
+                  roleRequest: null
+                });
+                triggerToast(`[Auto-Demotion]: Admin ${u.name} diturunkan peranan kepada MEMBER kerana tidak aktif selama 90+ hari.`, 'warning');
+              } catch (e) {
+                console.error("Peer demotion failed for " + u.name, e);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    runPeerDemotionCheck();
+  }, [membersList, isLoggedIn, isSuperAdmin]);
+
   // Penyegerakan maklumat terkini dari pelayan setiap kali pengguna log masuk (Login Sync)
   useEffect(() => {
     if (!isLoggedIn || !auth.currentUser) return;
@@ -3669,6 +3742,28 @@ function AppContent({
                         <span className="text-[10px] text-[#0F2D52] bg-blue-50 px-1.5 py-0.5 rounded-full font-bold">New</span>
                       </div>
                       <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                        {/* Custom Inactivity Notification Drawer Item */}
+                        {(displayRole === 'admin' || displayRole === 'super_admin') && (() => {
+                          const lastActivityStr = userProfile?.last_event_created_date || userProfile?.joinDate;
+                          if (!lastActivityStr) return null;
+                          const lastActivity = new Date(lastActivityStr);
+                          const diffTime = new Date().getTime() - lastActivity.getTime();
+                          const daysInactive = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                          if (daysInactive >= 30) {
+                            return (
+                              <div className="text-[11.5px] p-2 hover:bg-slate-50 rounded-lg border-l-2 border-amber-600 bg-amber-500/5 text-left select-none">
+                                <p className="font-bold text-amber-800 flex items-center gap-1">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  Amaran Keaktifan Admin
+                                </p>
+                                <p className="text-slate-650 mt-0.5 text-[10px]">
+                                  Sila cipta aktiviti segera. Anda sudah {daysInactive} hari tidak aktif.
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         {announcements.filter(ann => !readAnnouncementIds.includes(String(ann.id))).map((ann) => (
                           <div 
                             key={ann.id} 
@@ -3726,6 +3821,33 @@ function AppContent({
                       {displayTier} MEMBER
                     </div>
                   </div>
+
+                  {/* Admin Inactivity Warning Alert */}
+                  {(displayRole === 'admin' || displayRole === 'super_admin') && (() => {
+                    const lastActivityStr = userProfile?.last_event_created_date || userProfile?.joinDate;
+                    if (!lastActivityStr) return null;
+                    const lastActivity = new Date(lastActivityStr);
+                    const diffTime = new Date().getTime() - lastActivity.getTime();
+                    const daysInactive = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (daysInactive >= 30) {
+                      return (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-3 text-left">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="font-extrabold text-xs text-amber-800 uppercase tracking-wide block">
+                              AMARAN KEAKTIFAN ADMIN ({daysInactive} HARI TIDAK AKTIF)
+                            </span>
+                            <p className="text-slate-700 text-[11px] font-semibold leading-relaxed">
+                              Anda dikesan tidak mencipta sebarang aktiviti (Event/Convoy/Merchant) dalam tempoh 30 hari yang lalu. 
+                              Sila cipta aktiviti baharu sebelum mencapai 90 hari untuk mengelakkan peranan admin ditukarkan kepada member secara automatik (Baki: {90 - daysInactive} hari).
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Summary Stats Row */}
                   <div className="grid grid-cols-3 gap-3.5 select-none text-center">

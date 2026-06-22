@@ -77,23 +77,29 @@ service cloud.firestore {
       // Allow standard profile owner or administrator to read doc if not suspended
       allow read: if isSignedIn() && isNotSuspended();
       
-      // Allow owner to create profile. Force regular users to 'member' role unless they are hardcoded super admin emails.
-      allow create: if isOwner(userId) && (
-        request.resource.data.get('role', 'member') == 'member' || 
-        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
-      ) && isValidUser(request.resource.data) && (
-        request.resource.data.get('mvocId', '') != 'MVOC-0001' ||
-        ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
-      ) && (
-        (
-          request.resource.data.get('points', 0) == 30 &&
-          request.resource.data.get('disclaimerAccepted', false) == true &&
-          request.resource.data.get('pdpaAccepted', false) == true &&
-          (request.resource.data.get('patch_status', false) == true || request.resource.data.get('officialPatch', false) == true || request.resource.data.get('patch', '') == 'mvoc_trusted_elite')
-        ) ||
-        (
-          request.resource.data.get('points', 0) == 0
-        )
+      // Allow owner or administrator to create profile. Force regular users to 'member' role unless they are hardcoded super admin emails.
+      allow create: if (
+        (isOwner(userId) && (
+          request.resource.data.get('role', 'member') == 'member' || 
+          ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
+        ) && isValidUser(request.resource.data) && (
+          request.resource.data.get('mvocId', '') != 'MVOC-0001' ||
+          ('email' in request.auth.token && (request.auth.token.email == 'nikazfar@gmail.com' || request.auth.token.email.matches('(?i)^nikazfar@gmail\\.com$')))
+        ) && (
+          (
+            request.resource.data.get('points', 0) == 30 &&
+            request.resource.data.get('disclaimerAccepted', false) == true &&
+            request.resource.data.get('pdpaAccepted', false) == true &&
+            (request.resource.data.get('patch_status', false) == true || request.resource.data.get('officialPatch', false) == true || request.resource.data.get('patch', '') == 'mvoc_trusted_elite')
+          ) ||
+          (
+            request.resource.data.get('points', 0) == 0
+          )
+        )) ||
+        (isNotSuspended() && isAdminOrSuperAdmin() && isValidUser(request.resource.data) && (
+          request.resource.data.get('mvocId', '') != 'MVOC-0001' ||
+          isMasterAdmin()
+        ))
       );
       
       // Allow updates if they are owner or admin/super_admin, with strict master admin protection.

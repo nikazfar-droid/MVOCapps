@@ -45,6 +45,9 @@ export interface MerchantItem {
   terms: string[];
   createdBy?: string;
   isDeletedFromStaticList?: boolean;
+  status?: 'active' | 'pending';
+  registered_by_admin_id?: string;
+  registered_by_admin_name?: string;
 }
 
 interface MerchantPartnersProps {
@@ -267,7 +270,10 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
           workingHours: data.workingHours || '',
           terms: data.terms || [],
           createdBy: data.createdBy || '',
-          isDeletedFromStaticList: data.isDeletedFromStaticList || false
+          isDeletedFromStaticList: data.isDeletedFromStaticList || false,
+          status: data.status || 'active',
+          registered_by_admin_id: data.registered_by_admin_id || data.createdBy || 'system',
+          registered_by_admin_name: data.registered_by_admin_name || (data.createdBy === 'system' ? 'System' : 'Jawatankuasa MVOC')
         });
       });
       setDbMerchants(list);
@@ -486,7 +492,21 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
         }, { merge: true });
         triggerToast('Merchant successfully updated', 'success');
       } else {
+        let registeredName = 'Admin';
+        if (currentUserId) {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', currentUserId));
+            if (userSnap.exists()) {
+              registeredName = userSnap.data().name || 'Admin';
+            }
+          } catch (e) {
+            console.warn("Failed to fetch admin name:", e);
+          }
+        }
+        
+        const initialStatus = currentUserRole === 'super_admin' ? 'active' : 'pending';
         const id = 'm_gen_' + Math.random().toString(36).substring(2, 11);
+        
         await setDoc(doc(db, 'merchants', id), {
           name: formName,
           category: formCategory,
@@ -504,9 +524,27 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
           website: formWebsite,
           terms: [],
           createdBy: currentUserId || 'system',
+          registered_by_admin_id: currentUserId || 'system',
+          registered_by_admin_name: registeredName,
+          status: initialStatus,
           createdAt: serverTimestamp()
         });
-        triggerToast('Merchant added successfully', 'success');
+
+        if (currentUserId) {
+          try {
+            await updateDoc(doc(db, 'users', currentUserId), {
+              last_event_created_date: new Date().toISOString()
+            });
+          } catch (err) {
+            console.warn("Failed to update last_event_created_date for admin:", err);
+          }
+        }
+        
+        if (initialStatus === 'pending') {
+          triggerToast('Merchant added! Pending verification by Super Admin.', 'success');
+        } else {
+          triggerToast('Merchant added and is now active.', 'success');
+        }
       }
       setIsAddEditModalOpen(false);
     } catch (err: any) {
@@ -516,14 +554,18 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
     }
   };
 
-  // Filter Categories list
-  const categories = ['All', 'Service & Repair', 'Premium Detailing', 'Accessories & Mods', 'Fuel & Care'];
+  // Filter Categories list matching short clean tab labels
+  const categories = ['All', 'Detailing', 'Service', 'Accessories', 'Fuel'];
 
   // Identify explicitly deleted static merchants
   const deletedStaticIds = new Set(dbMerchants.filter(m => m.isDeletedFromStaticList).map(m => String(m.id)));
   
   // Exclude deleted static merchants and the tombstone records themselves
-  const filteredDbMerchants = dbMerchants.filter(m => !m.isDeletedFromStaticList);
+  const filteredDbMerchants = dbMerchants.filter(m => {
+    if (m.isDeletedFromStaticList) return false;
+    if (!isAdmin && m.status === 'pending') return false;
+    return true;
+  });
   const filteredStaticMerchants = MERCHANT_DATA.filter(m => !deletedStaticIds.has(String(m.id)));
 
   // Match items based on query and category selection
@@ -534,7 +576,15 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
       m.discount.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory = selectedCategory === 'All' || m.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'All' || (() => {
+      const catLower = selectedCategory.toLowerCase();
+      const mCatLower = m.category.toLowerCase();
+      if (catLower === 'detailing') return mCatLower.includes('detailing');
+      if (catLower === 'service') return mCatLower.includes('service') || mCatLower.includes('repair');
+      if (catLower === 'accessories') return mCatLower.includes('accessories') || mCatLower.includes('mods');
+      if (catLower === 'fuel') return mCatLower.includes('fuel') || mCatLower.includes('care');
+      return mCatLower.includes(catLower);
+    })();
 
     return matchesSearch && matchesCategory;
   });
@@ -644,8 +694,8 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
         })}
       </div>
 
-      {/* LIST OF AVAILABLE SERVICE MERCHANTS */}
-      <div className="space-y-5">
+      {/* LIST OF AVAILABLE SERVICE MERCHANTS IN 2-COLUMN GRID */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5">
         {filteredMerchants.length > 0 ? (
           filteredMerchants.map((merchant) => {
             const isGoldOffer = merchant.discountType === 'gold';
@@ -655,10 +705,10 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
               <div 
                 key={merchant.id}
                 id={`merchant-card-${merchant.id}`}
-                className="bg-white rounded-3xl overflow-hidden border border-slate-150 shadow-3xs hover:shadow-xs transition duration-300 text-left flex flex-col group relative"
+                className="bg-white rounded-2xl overflow-hidden border border-slate-150 shadow-3xs hover:shadow-xs transition duration-300 text-left flex flex-col group relative"
               >
-                {/* Image layout container with hoverzoom effect & rating overlay */}
-                <div className="relative aspect-[16/8] md:aspect-[16/7.5] overflow-hidden bg-slate-100">
+                {/* Image layout container with 4:3 aspect ratio & rating overlay */}
+                <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 shrink-0">
                   <img 
                     src={merchant.image} 
                     alt={merchant.name}
@@ -667,21 +717,21 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
                   />
                   
                   {/* Rating Tag Overlaid top-right */}
-                  <div className="absolute top-4 right-4 flex items-center gap-2">
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
                     {isAdmin && (
                       <>
                         <button
                           onClick={(e) => openEditModal(merchant, e)}
-                          className="bg-white/95 backdrop-blur-xs w-7 h-7 rounded-full shadow-md border border-slate-100 flex items-center justify-center hover:bg-slate-100 transition"
+                          className="bg-white/95 backdrop-blur-xs w-6 h-6 rounded-full shadow-md border border-slate-100 flex items-center justify-center hover:bg-slate-100 transition"
                         >
-                          <Pencil className="w-3.5 h-3.5 text-[#0f2d52]" />
+                          <Pencil className="w-3 h-3 text-[#0f2d52]" />
                         </button>
                         {(currentUserRole === 'super_admin' || merchant.createdBy === currentUserId) && (
                           <button
                             onClick={(e) => handleDeleteMerchant(merchant, e)}
-                            className="bg-white/95 backdrop-blur-xs w-7 h-7 rounded-full shadow-md border border-red-100 flex items-center justify-center hover:bg-red-50 transition"
+                            className="bg-white/95 backdrop-blur-xs w-6 h-6 rounded-full shadow-md border border-red-155 flex items-center justify-center hover:bg-red-50 transition"
                           >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <Trash2 className="w-3 h-3 text-red-500" />
                           </button>
                         )}
                       </>
@@ -689,71 +739,84 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
                     <button
                       onClick={(e) => handleRateMerchant(merchant, e)}
                       disabled={ratedMerchantIds.has(String(merchant.id))}
-                      className={`backdrop-blur-xs px-2.5 py-1 rounded-xl shadow-md border flex items-center justify-center gap-1.5 h-8 select-none transition-all duration-200 active:scale-125 cursor-pointer ${
+                      className={`backdrop-blur-xs px-1.5 py-0.5 rounded-lg shadow-md border flex items-center justify-center gap-1 h-6 select-none transition-all duration-200 active:scale-110 cursor-pointer ${
                         ratedMerchantIds.has(String(merchant.id))
-                          ? 'bg-amber-500 border-amber-450 text-white shadow-[0_0_12px_rgba(245,158,11,0.65)] opacity-95 cursor-default'
-                          : 'bg-white/95 border-slate-100 text-slate-800 hover:bg-amber-50/70 hover:border-amber-250 hover:text-amber-650 shadow-xs'
+                          ? 'bg-amber-500 border-amber-450 text-white shadow-[0_0_8px_rgba(245,158,11,0.5)] opacity-95 cursor-default'
+                          : 'bg-white/95 border-slate-100 text-slate-800 hover:bg-amber-50/70 hover:border-amber-250 hover:text-amber-650 shadow-3xs'
                       }`}
-                      title={ratedMerchantIds.has(String(merchant.id)) ? "You have already rated this Merchant" : "Click to rate / vote for this Merchant"}
+                      title={ratedMerchantIds.has(String(merchant.id)) ? "You have already rated this Merchant" : "Click to rate"}
                     >
-                      <Star className={`w-3.5 h-3.5 transition-all ${
+                      <Star className={`w-3 h-3 transition-all ${
                         ratedMerchantIds.has(String(merchant.id))
-                          ? 'fill-white text-white drop-shadow-xs scale-110'
-                          : 'fill-amber-400 text-amber-400 group-hover:scale-110'
+                          ? 'fill-white text-white scale-115'
+                          : 'fill-amber-400 text-amber-400'
                       }`} />
-                      <span className="text-[10px] font-black leading-none mt-0.5">
+                      <span className="text-[9px] font-black leading-none mt-0.5">
                         {merchant.rating % 1 === 0 ? merchant.rating : merchant.rating.toFixed(1)}
                       </span>
                     </button>
                   </div>
 
-                  {/* Hot tag overlay for Gold Tier Exclusive */}
+                  {/* Status and Promo Tags (Compact layout) */}
+                  {merchant.status === 'pending' && (
+                    <div className="absolute top-2 left-2 bg-amber-500 text-white border border-amber-400/30 px-1.5 py-0.5 rounded-md shadow-md z-10">
+                      <span className="text-[7.5px] font-black tracking-wider uppercase leading-none">PENDING</span>
+                    </div>
+                  )}
                   {isGoldOffer && (
-                    <div className="absolute top-4 left-4 bg-[#0F2D52] text-amber-300 border border-amber-400/30 px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400" />
-                      <span className="text-[9px] font-black tracking-wider uppercase leading-none">GOLD TIER EXCLUSIVE</span>
+                    <div className={`absolute ${merchant.status === 'pending' ? 'top-8' : 'top-2'} left-2 bg-[#0F2D52] text-amber-300 border border-amber-400/30 px-1.5 py-0.5 rounded-md shadow-md flex items-center gap-0.5 z-10`}>
+                      <Award className="w-2.5 h-2.5 text-amber-400 shrink-0 fill-amber-400" />
+                      <span className="text-[7.5px] font-black tracking-wider uppercase leading-none">GOLD</span>
                     </div>
                   )}
                 </div>
 
-                {/* Content body container */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-display text-lg font-black tracking-tight text-[#0F2D52] leading-tight">
+                {/* Content body container (Compact Grid Style) */}
+                <div className="p-3.5 flex-1 flex flex-col justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] font-sans font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-550 border border-slate-200/50 uppercase tracking-wider w-fit">
+                        {merchant.category}
+                      </span>
+                      <h3 className="font-display text-xs md:text-sm font-black tracking-tight text-[#0F2D52] leading-tight line-clamp-1">
                         {merchant.name}
                       </h3>
-                      <span className="text-[9.5px] font-sans font-extrabold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200/50 uppercase tracking-wider">
-                        {merchant.category}
+                    </div>
+
+                    {/* Visible Credit */}
+                    <div className="text-[8.5px] text-slate-400 font-bold italic flex items-center gap-0.5">
+                      <span>Oleh:</span>
+                      <span className="text-[#0F2D52] not-italic font-extrabold truncate max-w-[80px]">
+                        {merchant.registered_by_admin_name ? merchant.registered_by_admin_name.split(' ')[0] : 'Jawatankuasa'}
                       </span>
                     </div>
 
-                    {/* Styled discount box highlighting value */}
-                    <div className={`p-3.5 rounded-2xl flex items-center gap-3 ${cardStyles.bg}`}>
-                      {cardStyles.icon}
-                      <span className={`text-[11.5px] tracking-tight leading-snug ${cardStyles.text}`}>
+                    {/* Styled compact discount box */}
+                    <div className={`p-2 rounded-xl flex items-center gap-1.5 ${cardStyles.bg}`}>
+                      <div className="shrink-0">{cardStyles.icon}</div>
+                      <span className={`text-[9px] tracking-tight leading-tight line-clamp-1 ${cardStyles.text}`}>
                         {merchant.discount}
                       </span>
                     </div>
                   </div>
 
                   {/* Interactive Claim / View Info actions aligned properly */}
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex pt-1 mt-auto select-none">
                     {merchant.discountType === 'gold' ? (
                       <button
                         onClick={() => setSelectedMerchant(merchant)}
-                        className="w-full bg-[#0F2D52] hover:bg-[#143964] text-white flex items-center justify-center gap-2 font-bold text-xs h-[44px] rounded-xl transition shadow-xs cursor-pointer"
+                        className="w-full bg-[#0F2D52] hover:bg-[#143964] text-white flex items-center justify-center gap-1 font-bold text-[10px] h-[34px] rounded-lg transition shadow-xs cursor-pointer"
                       >
-                        <span>Claim Offer</span>
-                        <ArrowRight className="w-4 h-4" />
+                        <span>Claim</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     ) : (
                       <button
                         onClick={() => setSelectedMerchant(merchant)}
-                        className="w-full bg-white hover:bg-slate-50 text-[#0F2D52] border border-slate-250 flex items-center justify-center gap-2 font-bold text-xs h-[44px] rounded-xl transition shadow-3xs cursor-pointer"
+                        className="w-full bg-white hover:bg-slate-50 text-[#0F2D52] border border-slate-205 flex items-center justify-center gap-1 font-bold text-[10px] h-[34px] rounded-lg transition shadow-3xs cursor-pointer"
                       >
-                        <span>View Offer Details</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <span>Details</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
