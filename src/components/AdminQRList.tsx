@@ -26,6 +26,12 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
   // Strict role guard states
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [checkingRole, setCheckingRole] = useState(true);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [selectedAdminFilter, setSelectedAdminFilter] = useState('');
+  const [selectedChapterFilter, setSelectedChapterFilter] = useState('');
+  const [managedChapters, setManagedChapters] = useState<string[]>([]);
+  const [chaptersList] = useState(['Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang', 'Perak', 'Perlis', 'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor', 'Terengganu', 'W.P Kuala Lumpur', 'W.P Labuan', 'W.P Putrajaya']);
+  const [selectedChapterToCreate, setSelectedChapterToCreate] = useState('');
 
   // Create QR Code Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -96,6 +102,12 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           const role = userSnap.data()?.role || 'member';
           console.log('[DEBUG] Database validated user role:', role);
           setCurrentUserRole(role);
+          let mChapters: string[] = [];
+          if (userSnap.data()?.managedChapter) {
+            const mc = userSnap.data()?.managedChapter;
+            mChapters = Array.isArray(mc) ? mc : [mc];
+          }
+          setManagedChapters(mChapters);
         } else {
           console.log('[DEBUG] No user profile exists, defaults to member.');
           setCurrentUserRole('member');
@@ -122,6 +134,16 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
       const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       console.log('[DEBUG] Firestore: Loaded Events:', evs);
       setEvents(evs);
+      const cRole = currentUserRole || (isAdmin ? 'super_admin' : 'member');
+      if (cRole === 'super_admin') {
+        try {
+          const usersSnap = await getDocs(collection(db, 'users'));
+          const uList = usersSnap.docs
+             .map(d => ({ id: d.id, ...d.data() }))
+             .filter(u => u.role === 'admin' || u.role === 'super_admin');
+          setUsersList(uList as any[]);
+        } catch (e) {}
+      }
     } catch (err: any) {
       console.error('[ERROR] Failed fetching events collection:', err);
       triggerToast(`Events fetch error: ${err.message || String(err)}`, 'error');
@@ -315,7 +337,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           limit: 100,
           status: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       } else if (selectedType === 'convoys') {
@@ -326,7 +348,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           status: 'OPEN',
           status_qr: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       } else if (selectedType === 'attendance') {
@@ -335,7 +357,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
           subtitle: `Created on ${new Date().toLocaleDateString()}`,
           status: 'active',
           expiresAt: null,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(), createdBy: auth.currentUser?.uid || null, chapter: selectedChapterToCreate || null
         });
         await setDoc(doc(db, 'qrCodes', docRef.id), { status: 'active', expiresAt: null });
       }
@@ -522,6 +544,40 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
       {/* 3. Scrolling Feed Layout */}
       <div className="flex-1 overflow-y-auto px-6 pb-24 max-w-md mx-auto w-full space-y-6">
         
+        
+      {/* Super Admin Filters */}
+      {currentUserRole === 'super_admin' && (
+        <div className="flex-shrink-0 px-6 pt-2 pb-4 max-w-xl mx-auto w-full">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5"><AlertTriangle className="w-4 h-4 text-amber-500" /> MASTER CONTROL</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 mb-1 uppercase">Filter by Admin</label>
+                <select 
+                  value={selectedAdminFilter}
+                  onChange={(e) => setSelectedAdminFilter(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-slate-800"
+                >
+                  <option value="">All Admins (Global)</option>
+                  {usersList.map(u => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 mb-1 uppercase">Filter by Chapter</label>
+                <select 
+                  value={selectedChapterFilter}
+                  onChange={(e) => setSelectedChapterFilter(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-slate-800"
+                >
+                  <option value="">All Chapters (Global)</option>
+                  {chaptersList.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
         {loadingData ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#0F2D52] mb-3"></div>
@@ -532,7 +588,23 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
             {/* CARD 1: OFFICIAL EVENTS BLOCK */}
             <div>
               <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Official Event Records</div>
-              {events.length === 0 ? (
+              
+              {(() => {
+                const isSuperAdmin = currentUserRole === 'super_admin';
+                const activeEvents = events.filter(ev => {
+                  const config = qrConfigs[ev.id];
+                  if (config?.expiresAt) {
+                    const expDate = config.expiresAt.toDate ? config.expiresAt.toDate() : new Date(config.expiresAt);
+                    if (new Date().getTime() - expDate.getTime() > 24 * 60 * 60 * 1000) return false;
+                  }
+                  if (isSuperAdmin) {
+                    if (selectedAdminFilter && ev.createdBy !== selectedAdminFilter) return false;
+                    if (selectedChapterFilter && ev.chapter !== selectedChapterFilter) return false;
+                    return true;
+                  }
+                  return ev.createdBy === auth.currentUser?.uid || ev.adminId === auth.currentUser?.uid;
+                });
+                return activeEvents.length === 0 ? (
                 /* Beautiful visual placeholder matching Event style when empty */
                 <div className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#0e2340] p-6 border border-slate-200/80">
                   <div className="bg-[#0e2340] text-white flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg w-fit">
@@ -570,7 +642,8 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                   </div>
                 </div>
               ) : (
-                events.map((event) => (
+                activeEvents.map((event) => (
+
                   <div 
                     key={event.id}
                     className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#0e2340] p-6 border border-slate-200/80 mb-4"
@@ -648,13 +721,29 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                     {renderQRControlPanel(event.id)}
                   </div>
                 ))
-              )}
+              );
+              })()}
             </div>
-
             {/* CARD 2: ACTIVE CONVOYS BLOCK */}
             <div>
               <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Active Convoy Tracks</div>
-              {convoys.length === 0 ? (
+              
+              {(() => {
+                const isSuperAdmin = currentUserRole === 'super_admin';
+                const activeConvoys = convoys.filter(cv => {
+                  const config = qrConfigs[cv.id];
+                  if (config?.expiresAt) {
+                    const expDate = config.expiresAt.toDate ? config.expiresAt.toDate() : new Date(config.expiresAt);
+                    if (new Date().getTime() - expDate.getTime() > 24 * 60 * 60 * 1000) return false;
+                  }
+                  if (isSuperAdmin) {
+                    if (selectedAdminFilter && cv.createdBy !== selectedAdminFilter) return false;
+                    if (selectedChapterFilter && cv.chapter !== selectedChapterFilter) return false;
+                    return true;
+                  }
+                  return cv.createdBy === auth.currentUser?.uid || cv.adminId === auth.currentUser?.uid;
+                });
+                return activeConvoys.length === 0 ? (
                 /* Beautiful visual placeholder matching Convoy layout style when empty */
                 <div className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4e6c92] p-6 border border-slate-200/80">
                   <div className="flex justify-between items-center">
@@ -706,7 +795,8 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                   </div>
                 </div>
               ) : (
-                convoys.map((convoy) => (
+                activeConvoys.map((convoy) => (
+
                   <div 
                     key={convoy.id}
                     className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4e6c92] p-6 border border-slate-200/80 mb-4"
@@ -796,149 +886,81 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                     {renderQRControlPanel(convoy.id)}
                   </div>
                 ))
-              )}
+              );
+              })()}
             </div>
-
-            {/* CARD 3: CHAPTER GATHERINGS BLOCK */}
+            {/* CARD 3: STATE CHAPTER QR (PERSISTENT) */}
             <div>
-              <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Chapter Gathering Sessions</div>
-              {attendanceSessions.length === 0 ? (
-                /* Beautiful visual placeholder matching Chapter Gathering layout style when empty */
-                <div className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4d2500] p-6 border border-slate-200/80">
-                  <div className="bg-[#4d2500] text-[#ffddb3] flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1.5 rounded-lg w-fit">
-                    <QrCode className="w-3.5 h-3.5" />
-                    CHAPTER GATHERING
-                  </div>
-                  <h3 className="text-lg font-extrabold text-[#0e2340] mt-3">Klang Valley Monthly Meetup</h3>
-                  
-                  <div className="grid grid-cols-2 gap-3 mt-3 text-xs font-semibold">
-                    <div className="bg-slate-50 border border-slate-150 p-2.5 rounded-xl">
-                      <div className="text-slate-400 font-bold uppercase text-[8px] tracking-wide">ZONE</div>
-                      <div className="text-slate-800 font-extrabold text-xs mt-0.5">Central</div>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-150 p-2.5 rounded-xl">
-                      <div className="text-slate-400 font-bold uppercase text-[8px] tracking-wide">VENUE</div>
-                      <div className="text-slate-800 font-extrabold text-xs mt-0.5">Bukit Jalil</div>
-                    </div>
-                  </div>
+              <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Persistent State Chapter QR</div>
+              {(() => {
+                const displayedChapters = currentUserRole === 'super_admin'
+                  ? (selectedChapterFilter ? [selectedChapterFilter] : (selectedAdminFilter ? (usersList.find(u => u.id === selectedAdminFilter)?.managedChapter ? (Array.isArray(usersList.find(u => u.id === selectedAdminFilter).managedChapter) ? usersList.find(u => u.id === selectedAdminFilter).managedChapter : [usersList.find(u => u.id === selectedAdminFilter).managedChapter]) : []) : chaptersList))
+                  : managedChapters;
 
-                  <button 
-                    onClick={() => {
-                      setCustomQrName('Klang Valley Monthly Meetup');
-                      setSelectedType('attendance');
-                      setIsCreateModalOpen(true);
-                    }}
-                    className="flex justify-center items-center gap-1.5 w-full mt-4 py-2 bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition hover:bg-amber-800 shadow-sm cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    ACTIVATE LIVE RECORD
-                  </button>
+                if (displayedChapters.length === 0) {
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4d2500] p-6 border border-slate-200/80 text-center">
+                      <p className="text-xs font-bold text-slate-500">Tiada Chapter State yang diuruskan.</p>
+                    </div>
+                  );
+                }
 
-                  <div className="mt-5 p-5 bg-[#f8fafc] rounded-2xl flex flex-col items-center justify-center border border-slate-200/60 shadow-inner">
-                    <div className="bg-[#05101e] rounded-xl overflow-hidden shadow-lg border border-slate-800 w-full max-w-[160px] flex flex-col">
-                      <div className="bg-[#0f2d52] px-2.5 py-1 flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-rose-500"></span>
-                        <span className="w-1 h-1 rounded-full bg-amber-500"></span>
-                        <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
-                        <span className="text-[7px] text-white/50 ml-1 font-bold">CHAPTER ENTRY</span>
+                return displayedChapters.map((chap) => {
+                  const chapId = 'chapter-' + chap.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+                  return (
+                    <div 
+                      key={chap}
+                      className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4d2500] p-6 border border-slate-200/80 mb-4"
+                    >
+                      <div className="bg-[#4d2500] text-[#ffddb3] flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1.5 rounded-lg w-fit">
+                        <QrCode className="w-3.5 h-3.5" />
+                        STATE CHAPTER QR
                       </div>
-                      <div className="bg-white p-3.5 flex justify-center items-center">
-                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: 'placeholder-chapter', name: 'Klang Valley Chapter Gathering' }))}`} size={80} level="H" imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 15, width: 15, excavate: true }} />
+                      <h3 className="text-lg font-extrabold text-[#0e2340] mt-3 leading-snug">{chap} Chapter</h3>
+                      
+                      <div className="grid grid-cols-2 gap-2 mt-4 text-[10px] font-black uppercase text-slate-500">
+                        <button 
+                          onClick={() => downloadQR(`qr-${chapId}`, `${chap} Chapter`)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-700 hover:brightness-95 text-white font-extrabold rounded-xl shadow-sm cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          DOWNLOAD QR
+                        </button>
+                        <button 
+                          onClick={() => copyQRLink({ type: 'attendance', context: 'chapter', refId: chap, name: `${chap} Chapter` })}
+                          className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl border border-slate-200/50 cursor-pointer"
+                        >
+                          <LinkIcon className="w-3.5 h-3.5" />
+                          COPY LINK
+                        </button>
                       </div>
-                    </div>
-                    <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Chapter Entry</span>
-                  </div>
-                </div>
-              ) : (
-                attendanceSessions.map((session) => (
-                  <div 
-                    key={session.id}
-                    className="bg-white rounded-2xl shadow-sm border-t-4 border-t-[#4d2500] p-6 border border-slate-200/80 mb-4"
-                  >
-                    <div className="bg-[#4d2500] text-[#ffddb3] flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1.5 rounded-lg w-fit">
-                      <QrCode className="w-3.5 h-3.5" />
-                      CHAPTER GATHERING
-                    </div>
-                    <h3 className="text-lg font-extrabold text-[#0e2340] mt-3 leading-snug">{session.title}</h3>
-                    
-                    <div className="grid grid-cols-2 gap-3 mt-3 text-xs font-semibold">
-                      <div className="bg-slate-50 border border-slate-150 p-2.5 rounded-xl">
-                        <div className="text-slate-400 font-bold uppercase text-[8px] tracking-wide">ZONE</div>
-                        <div className="text-slate-800 font-extrabold text-xs mt-0.5">{session.zone || 'Central'}</div>
-                      </div>
-                      <div className="bg-slate-50 border border-slate-150 p-2.5 rounded-xl">
-                        <div className="text-slate-400 font-bold uppercase text-[8px] tracking-wide">VENUE</div>
-                        <div className="text-slate-800 font-extrabold text-xs mt-0.5">{session.venue || 'Bukit Jalil'}</div>
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 mt-4 text-[10px] font-black uppercase text-slate-500">
-                      <button 
-                        onClick={() => downloadQR(`qr-attendance-${session.id}`, session.title)}
-                        className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-700 hover:brightness-95 text-white font-extrabold rounded-xl shadow-sm cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        DOWNLOAD QR
-                      </button>
-                      <button 
-                        onClick={() => copyQRLink({ type: 'attendance', context: 'general', refId: String(session.id), name: session.title })}
-                        className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-xl border border-slate-200/50 cursor-pointer"
-                      >
-                        <LinkIcon className="w-3.5 h-3.5" />
-                        COPY LINK
-                      </button>
-                    </div>
-
-                    {(() => {
-                      const config = qrConfigs[session.id] || { status: 'active', expiresAt: null };
-                      const isQrDisabled = config.status === 'disabled';
-                      let isQrExpired = false;
-                      if (config.expiresAt) {
-                        const expDate = config.expiresAt.toDate ? config.expiresAt.toDate() : new Date(config.expiresAt);
-                        isQrExpired = expDate < new Date();
-                      }
-                      const isInactive = isQrDisabled || isQrExpired;
-
-                      return (
-                        <div className="mt-5 p-5 bg-[#f8fafc] rounded-2xl flex flex-col items-center justify-center border border-slate-200/60 shadow-inner relative overflow-hidden">
-                          <div className={`bg-[#05101e] rounded-xl overflow-hidden shadow-lg border border-slate-800 w-full max-w-[160px] flex flex-col transition-all ${isInactive ? 'opacity-20 grayscale' : ''}`}>
-                            <div className="bg-[#0f2d52] px-2.5 py-1 flex items-center gap-1">
-                              <span className="w-1 h-1 rounded-full bg-rose-500"></span>
-                              <span className="w-1 h-1 rounded-full bg-amber-500"></span>
-                              <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
-                              <span className="text-[7px] text-white/50 ml-1 font-bold">CHAPTER ENTRY</span>
-                            </div>
-                            <div className="bg-white p-3.5 flex justify-center items-center">
-                              <QRCodeSVG 
-                                id={`qr-attendance-${session.id}`} 
-                                value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: String(session.id), name: session.title }))}`} 
-                                size={80} 
-                                level="H"
-                                imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 15, width: 15, excavate: true }}
-                              />
-                            </div>
+                      <div className="mt-5 p-5 bg-[#f8fafc] rounded-2xl flex flex-col items-center justify-center border border-slate-200/60 shadow-inner relative overflow-hidden">
+                        <div className="bg-[#05101e] rounded-xl overflow-hidden shadow-lg border border-slate-800 w-full max-w-[160px] flex flex-col transition-all">
+                          <div className="bg-[#0f2d52] px-2.5 py-1 flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-rose-500"></span>
+                            <span className="w-1 h-1 rounded-full bg-amber-500"></span>
+                            <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+                            <span className="text-[7px] text-white/50 ml-1 font-bold">CHAPTER ENTRY</span>
                           </div>
-                          {isInactive && (
-                            <div className="absolute inset-0 bg-slate-100/50 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center">
-                              <span className="bg-rose-600 text-white text-[10px] font-extrabold uppercase px-2.5 py-1.5 rounded-lg shadow-md flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5" />
-                                {isQrDisabled ? 'QR DISABLED' : 'QR EXPIRED'}
-                              </span>
-                            </div>
-                          )}
-                          {!isInactive && (
-                            <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Chapter Entry</span>
-                          )}
+                          <div className="bg-white p-3.5 flex justify-center items-center">
+                            <QRCodeSVG 
+                              id={`qr-${chapId}`} 
+                              value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'chapter', refId: chap, name: chap + ' Chapter' }))}`} 
+                              size={80} 
+                              level="H"
+                              imageSettings={{ src: "/mvoc_logo.png", x: undefined, y: undefined, height: 15, width: 15, excavate: true }}
+                            />
+                          </div>
                         </div>
-                      );
-                    })()}
-
-                    {renderQRControlPanel(session.id)}
-                  </div>
-                ))
-              )}
+                        <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Permanent Chapter Check-in</span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
-
+            
             {/* CARD 4: REAL-TIME SYSTEM SCAN LOGS */}
             <div>
               <div className="flex items-center justify-between mb-2 px-1">
@@ -1155,6 +1177,19 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
                   <div className="flex-grow border-t border-slate-200"></div>
                 </div>
 
+                {(selectedType === 'events' || selectedType === 'convoys') && (
+                  <div className="mb-4">
+                    <label className="block text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">OPTIONAL: ASSIGN TO CHAPTER</label>
+                    <select 
+                      value={selectedChapterToCreate}
+                      onChange={(e) => setSelectedChapterToCreate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800"
+                    >
+                      <option value="">National / General (No Specific Chapter)</option>
+                      {chaptersList.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">3. MANUAL TITLE PERSISTENCE</label>
                   <input
