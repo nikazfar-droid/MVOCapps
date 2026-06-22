@@ -54,6 +54,7 @@ interface AdminDashboardProps {
   activeView?: 'members' | 'users';
   currentUserRole?: string;
   isMasterAdmin?: boolean;
+  eventsList?: any[];
 }
 
 export default function AdminDashboard({
@@ -74,7 +75,8 @@ export default function AdminDashboard({
   displayEmail,
   triggerToast,
   currentUserRole = 'member',
-  isMasterAdmin = false
+  isMasterAdmin = false,
+  eventsList = []
 }: AdminDashboardProps) {
 
   const isCurrentUserMasterAdmin = isMasterAdmin || displayEmail.toLowerCase() === MASTER_EMAIL;
@@ -823,6 +825,7 @@ export default function AdminDashboard({
 
       {isScannerOpen && (
         <QREventScanner 
+          events={eventsList}
           onClose={() => setIsScannerOpen(false)}
           triggerToast={triggerToast}
         />

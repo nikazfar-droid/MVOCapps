@@ -90,7 +90,7 @@ import { collection, updateDoc, doc, deleteDoc, onSnapshot, setDoc, runTransacti
 import { SyncedUserProfile, formatMvocId } from './lib/fetchAndSyncData';
 import { formatWhatsAppNumber, isValidWhatsAppNumber } from './lib/phoneUtils';
 import { getTranslation } from './lib/translations';
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 // @ts-ignore
 import regeneratedImage from './assets/images/regenerated_image_1781700798979.jpg';
 // @ts-ignore
@@ -104,6 +104,19 @@ import { QRCodeSVG } from 'qrcode.react';
 // Define core constants
 export const MASTER_ADMIN_ID = 'MVOC-0001';
 export const MASTER_EMAIL = 'nikazfar@gmail.com';
+
+// Haversine formula to calculate distance in meters between two GPS coordinates
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 // Define core types
 type TabType = 'dashboard' | 'profile' | 'vehicle' | 'card' | 'events' | 'convoy' | 'gallery' | 'announcements' | 'chapters' | 'merchants' | 'admin' | 'users' | 'broadcast' | 'members' | 'directory';
@@ -141,6 +154,9 @@ interface EventItem {
   image?: string;
   category?: 'upcoming' | 'ongoing' | 'completed';
   warningText?: string;
+  creatorId?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export default function App() {
@@ -203,6 +219,31 @@ function AppContent({
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Handle Google OAuth redirect result (for mobile browsers that use signInWithRedirect)
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          const user = result.user;
+          const isOk = await triggerSync(user.uid, user.email || '');
+          setIsLoggedIn(true);
+          setCurrentTab('dashboard');
+          if (isOk) {
+            triggerToast(`Log masuk berjaya! ${user.displayName || user.email}`, 'success');
+          } else {
+            triggerToast(`Onboarding terhenti: ${user.email} tidak berdaftar dalam pangkalan data.`, 'error');
+          }
+        }
+      })
+      .catch((err) => {
+        // Only show error if it's not the "no redirect pending" case
+        if (err?.code !== 'auth/no-auth-event') {
+          console.warn('[Auth] getRedirectResult error:', err?.message || err);
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Simple connectivity listener for Offline / Online status PWA notifications
@@ -616,6 +657,16 @@ function AppContent({
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedResultUser, setScannedResultUser] = useState<any | null>(null);
+  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
+  useEffect(() => {
+    if (!isQrModalOpen) return;
+    // Update timestamp every 10 seconds to keep it dynamic and secure
+    setQrTimestamp(Date.now());
+    const interval = setInterval(() => {
+      setQrTimestamp(Date.now());
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isQrModalOpen]);
   const [isSavingContact, setIsSavingContact] = useState(false);
 
   // Admin QR Code Attendance Generator state
@@ -1282,6 +1333,8 @@ function AppContent({
     }
   }, []);
 
+
+
   const handleCopyLink = () => {
     const cardUrl = `https://mvoc.my/card/${displayMvocId}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1485,8 +1538,10 @@ function AppContent({
       registered: false,
       organizer: 'HQ',
       badge: 'OPEN',
-      image: 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
-      category: 'upcoming'
+      image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600&auto=format&fit=crop&q=80',
+      category: 'upcoming',
+      latitude: 3.1493,
+      longitude: 101.6938
     },
     { 
       id: 2, 
@@ -1501,12 +1556,14 @@ function AppContent({
       badge: 'LIMITED SLOTS',
       warningText: 'Only 5 slots remaining',
       image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&auto=format&fit=crop&q=80',
-      category: 'upcoming'
+      category: 'upcoming',
+      latitude: 1.4622,
+      longitude: 103.7644
     },
     { 
       id: 3, 
-      title: 'Genting Highlands Convoy 2024', 
-      date: '16 Nov 2024', 
+      title: 'Genting Highlands Convoy 2026', 
+      date: '16 Nov 2026', 
       location: 'Awana SkyWay Base Station', 
       rsvps: 124, 
       limit: 150, 
@@ -1515,7 +1572,9 @@ function AppContent({
       organizer: 'Selangor Chapter',
       badge: 'OFFICIAL CONVOY',
       image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
-      category: 'upcoming'
+      category: 'upcoming',
+      latitude: 3.4079,
+      longitude: 101.7828
     },
     {
       id: 4,
@@ -1529,10 +1588,28 @@ function AppContent({
       organizer: 'Selangor Chapter',
       badge: 'ONGOING',
       image: 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80',
-      category: 'ongoing'
+      category: 'ongoing',
+      latitude: 3.0886,
+      longitude: 101.5772
     },
     {
       id: 5,
+      title: 'East Coast Gathering & Charity',
+      date: '22 Jun 2026',
+      location: 'Kuantan, Pahang',
+      rsvps: 88,
+      limit: 100,
+      featured: false,
+      registered: false,
+      organizer: 'East Coast Chapter',
+      badge: 'LIVE CONVOY',
+      image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+      category: 'ongoing',
+      latitude: 3.8077,
+      longitude: 103.3260
+    },
+    {
+      id: 6,
       title: 'Port Dickson BBQ & Drive',
       date: '12 May 2026',
       location: 'Batu 4 Beach, Port Dickson',
@@ -1543,11 +1620,101 @@ function AppContent({
       organizer: 'Negeri Sembilan Chapter',
       badge: 'COMPLETED',
       image: 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=600&auto=format&fit=crop&q=80',
-      category: 'completed'
+      category: 'completed',
+      latitude: 2.5036,
+      longitude: 101.8344
+    },
+    {
+      id: 7,
+      title: 'Cameron Highlands Escapade',
+      date: '14 Feb 2026',
+      location: 'Brinchang, Cameron Highlands',
+      rsvps: 95,
+      limit: 100,
+      featured: false,
+      registered: false,
+      organizer: 'Perak Chapter',
+      badge: 'COMPLETED',
+      image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80',
+      category: 'completed',
+      latitude: 4.4941,
+      longitude: 101.3878
+    },
+    {
+      id: 8,
+      title: 'Northern Route Discovery',
+      date: '10 Jan 2026',
+      location: 'Penang Bridge / Georgetown',
+      rsvps: 130,
+      limit: 150,
+      featured: false,
+      registered: false,
+      organizer: 'Penang Chapter',
+      badge: 'COMPLETED',
+      image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
+      category: 'completed',
+      latitude: 5.3528,
+      longitude: 100.3542
+    },
+    {
+      id: 9,
+      title: 'National Day Mega Convoy 2026',
+      date: '31 Aug 2026',
+      location: 'Putrajaya Square, Putrajaya',
+      rsvps: 250,
+      limit: 300,
+      featured: true,
+      registered: false,
+      organizer: 'HQ',
+      badge: 'MEGA CONVOY',
+      image: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=600&auto=format&fit=crop&q=80',
+      category: 'upcoming',
+      latitude: 2.9264,
+      longitude: 101.6964
+    },
+    {
+      id: 10,
+      title: 'East Coast Coastal Route Drive',
+      date: '10 Oct 2026',
+      location: 'Cherating Beach, Kuantan',
+      rsvps: 80,
+      limit: 100,
+      featured: true,
+      registered: false,
+      organizer: 'East Coast Chapter',
+      badge: 'SCENIC DRIVE',
+      image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
+      category: 'upcoming',
+      latitude: 4.1278,
+      longitude: 103.3934
+    },
+    {
+      id: 11,
+      title: 'Veloz Track Day & Tuning',
+      date: '05 Dec 2026',
+      location: 'Sepang International Circuit, Selangor',
+      rsvps: 60,
+      limit: 80,
+      featured: true,
+      registered: false,
+      organizer: 'Selangor Chapter',
+      badge: 'TRACK DAY',
+      image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&auto=format&fit=crop&q=80',
+      category: 'upcoming',
+      latitude: 2.7607,
+      longitude: 101.7377
     }
   ];
 
-  const [events, setEvents] = useState<EventItem[]>(DEFAULT_SAMPLE_EVENTS);
+  const [events, setEvents] = useState<EventItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('mvoc_deleted_event_ids');
+      const deletedIds = saved ? JSON.parse(saved) : [];
+      return DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
+    } catch {
+      return DEFAULT_SAMPLE_EVENTS;
+    }
+  });
 
   // lifted Gallery Albums to top-level state for real-time interactivity & deletion
   const [galleryAlbums, setGalleryAlbums] = useState([
@@ -1789,6 +1956,9 @@ function AppContent({
   const [newEventCategory, setNewEventCategory] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
   const [newEventBadge, setNewEventBadge] = useState('OPEN');
   const [newEventDesc, setNewEventDesc] = useState('');
+  const [newEventLatitude, setNewEventLatitude] = useState('');
+  const [newEventLongitude, setNewEventLongitude] = useState('');
+  const [newEventGmapsLink, setNewEventGmapsLink] = useState('');
 
   // Gallery inputs / actions status
   const [isUploadGalleryModalOpen, setIsUploadGalleryModalOpen] = useState(false);
@@ -1945,34 +2115,56 @@ function AppContent({
     try {
       const eventsRef = collection(db, 'events');
       const unsubscribe = onSnapshot(eventsRef, (snapshot) => {
+        let deletedIds: (string | number)[] = [];
+        try {
+          const saved = localStorage.getItem('mvoc_deleted_event_ids');
+          deletedIds = saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          console.warn("Failed to load deleted event IDs:", e);
+        }
+
         const list: EventItem[] = [];
         snapshot.forEach((docSnap) => {
           const docData = docSnap.data();
-          list.push({
-            id: docSnap.id as any,
-            title: docData.title || '',
-            date: docData.date || '',
-            location: docData.location || '',
-            rsvps: docData.rsvps || 0,
-            limit: docData.limit || 150,
-            featured: docData.featured !== false,
-            registered: docData.registered || false,
-            organizer: docData.organizer || 'HQ',
-            badge: docData.badge || 'OPEN',
-            image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
-            category: docData.category || 'upcoming',
-            warningText: docData.warningText || ''
-          });
+          const docId = docSnap.id;
+          if (!deletedIds.includes(docId)) {
+            list.push({
+              id: docId as any,
+              title: docData.title || '',
+              date: docData.date || '',
+              location: docData.location || '',
+              rsvps: docData.rsvps || 0,
+              limit: docData.limit || 150,
+              featured: docData.featured !== false,
+              registered: docData.registered || false,
+              organizer: docData.organizer || 'HQ',
+              badge: docData.badge || 'OPEN',
+              image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+              category: docData.category || 'upcoming',
+              warningText: docData.warningText || '',
+              creatorId: docData.creatorId || '',
+              latitude: docData.latitude ? Number(docData.latitude) : undefined,
+              longitude: docData.longitude ? Number(docData.longitude) : undefined
+            });
+          }
         });
         setFirestoreEvents(list);
+        
+        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
         if (list.length > 0) {
           setEvents(list);
         } else {
-          setEvents(DEFAULT_SAMPLE_EVENTS);
+          setEvents(activeSampleEvents);
         }
       }, (error) => {
         console.error("Error listening to events:", error);
-        setEvents(DEFAULT_SAMPLE_EVENTS);
+        let deletedIds: (string | number)[] = [];
+        try {
+          const saved = localStorage.getItem('mvoc_deleted_event_ids');
+          deletedIds = saved ? JSON.parse(saved) : [];
+        } catch (e) {}
+        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
+        setEvents(activeSampleEvents);
       });
       return () => unsubscribe();
     } catch (e) {
@@ -2670,27 +2862,38 @@ function AppContent({
 
   // Trigger temporary toasts are handled as a prop passed from parent App wrapper
 
-  // Google Authentication
+  // Google Authentication — uses Popup on desktop, Redirect on mobile
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    triggerToast('Connecting to secure Google OAuth...', 'info');
+    triggerToast('Menghubungi Google OAuth...', 'info');
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      if (user) {
-        const isOk = await triggerSync(user.uid, user.email || '');
-        setIsLoggedIn(true);
-        setCurrentTab('dashboard');
-        if (isOk) {
-          triggerToast(`Google sign-in successful! Synced: ${user.displayName || user.email}`, 'success');
-        } else {
-          triggerToast(`Onboarding halted: ${user.email} is not registered in our database.`, 'error');
+
+      // Detect mobile browser — use redirect flow (more reliable on mobile via IP)
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        // Redirect flow: page will reload, result captured in useEffect below
+        await signInWithRedirect(auth, provider);
+        return; // page will redirect away, no further code runs
+      } else {
+        // Popup flow for desktop
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        if (user) {
+          const isOk = await triggerSync(user.uid, user.email || '');
+          setIsLoggedIn(true);
+          setCurrentTab('dashboard');
+          if (isOk) {
+            triggerToast(`Log masuk berjaya! ${user.displayName || user.email}`, 'success');
+          } else {
+            triggerToast(`Onboarding terhenti: ${user.email} tidak berdaftar dalam pangkalan data.`, 'error');
+          }
         }
       }
     } catch (err: any) {
-      console.warn("Google Sign In Popup blocked or config missing in preview iframe. Error info:", err);
+      console.warn("Google Sign In error:", err);
       setAuthPopupErrorMsg(err?.message || String(err));
       setIsAuthPopupBlockedOpen(true);
     } finally {
@@ -2718,6 +2921,54 @@ function AppContent({
       return ev;
     }));
   };
+
+  const canDeleteEvent = (ev: EventItem) => {
+    const currentUserId = auth.currentUser?.uid || userProfile?.uid || '';
+    const isUserSuperAdmin = displayRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
+    return isUserSuperAdmin || (ev.creatorId !== undefined && ev.creatorId === currentUserId);
+  };
+
+  // Delete event handler
+  const deleteEvent = async (eventId: string | number) => {
+    const eventToDel = events.find(e => e.id === eventId);
+    if (!eventToDel) return;
+
+    // UI Feedback: Prompt confirmation dialog
+    if (!window.confirm('Adakah anda pasti untuk memadam acara ini?')) {
+      return;
+    }
+
+    try {
+      console.log(`[DELETE REQUEST] Deleting event ID: ${eventId}`);
+      if (typeof eventId === 'string') {
+        // If the ID is a string, delete the document from Firestore events collection
+        await deleteDoc(doc(db, 'events', eventId));
+        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}" dari database`, 'success');
+      } else {
+        // Mock event local state refresh fallback
+        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}"`, 'success');
+      }
+
+      // Add to deleted IDs in localStorage to persist across refreshes
+      try {
+        const saved = localStorage.getItem('mvoc_deleted_event_ids');
+        const deletedIds = saved ? JSON.parse(saved) : [];
+        if (!deletedIds.includes(eventId)) {
+          deletedIds.push(eventId);
+          localStorage.setItem('mvoc_deleted_event_ids', JSON.stringify(deletedIds));
+        }
+      } catch (e) {
+        console.warn("Failed to save deleted event ID to localStorage:", e);
+      }
+
+      // State Refresh: filter out the deleted event to immediately reflect on UI
+      setEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
+    } catch (err: any) {
+      console.error("Error deleting event:", err);
+      triggerToast(`Gagal memadamkan acara: ${err.message || err}`, 'error');
+    }
+  };
+
 
   // Handle simulated logout
   const handleLogout = async () => {
@@ -2750,9 +3001,10 @@ function AppContent({
       mvocId: displayMvocId,
       name: displayName,
       chapter: displayChapter,
-      photoURL: safeAvatarUrl
+      photoURL: safeAvatarUrl,
+      ts: qrTimestamp
     });
-  }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl]);
+  }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl, qrTimestamp]);
 
   const rewardsInfo = useMemo(() => {
     const meetsCompliance = userProfile?.disclaimerAccepted === true &&
@@ -5951,12 +6203,11 @@ function AppContent({
                                     >
                                       <Share2 className="w-4 h-4 shrink-0" />
                                     </button>
-                                    {isAdminOrSuperAdmin() && (
+                                    {canDeleteEvent(ev) && (
                                       <button 
-                                        onClick={() => {
-                                          setEventToDelete(ev);
-                                          setIsDeleteEventModalOpen(true);
-                                          setDeleteEventConfirmText('');
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteEvent(ev.id);
                                         }}
                                         className="p-2.5 bg-red-50 text-red-650 hover:bg-red-100 rounded-lg transition cursor-pointer border border-red-150"
                                         id={`delete-btn-${ev.id}`}
@@ -7786,6 +8037,7 @@ function AppContent({
                   activeView="users"
                   currentUserRole={displayRole}
                   isMasterAdmin={isMasterAdmin}
+                  eventsList={events}
                 />
               )}
 
@@ -9398,6 +9650,80 @@ function AppContent({
                     className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-mono text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
+
+                {/* Google Maps Link with auto-extract */}
+                <div className="space-y-1">
+                  <label className="text-[10px] text-emerald-400 font-bold uppercase block flex items-center gap-1.5">
+                    <span>🗺️</span> Google Maps Link <span className="text-rose-400">*</span>
+                    <span className="text-slate-500 font-medium normal-case">(untuk Geofencing)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newEventGmapsLink}
+                      onChange={(e) => {
+                        const url = e.target.value;
+                        setNewEventGmapsLink(url);
+                        // Auto-extract coords from full Google Maps URLs (not short links)
+                        // Pattern: @lat,lon or ?q=lat,lon or /place/@lat,lon
+                        const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (atMatch) {
+                          setNewEventLatitude(atMatch[1]);
+                          setNewEventLongitude(atMatch[2]);
+                          return;
+                        }
+                        const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (qMatch) {
+                          setNewEventLatitude(qMatch[1]);
+                          setNewEventLongitude(qMatch[2]);
+                          return;
+                        }
+                        const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                        if (llMatch) {
+                          setNewEventLatitude(llMatch[1]);
+                          setNewEventLongitude(llMatch[2]);
+                          return;
+                        }
+                      }}
+                      placeholder="https://maps.app.goo.gl/... atau paste URL Google Maps penuh"
+                      className="flex-1 bg-[#0a1829] border border-emerald-500/30 rounded-xl py-2.5 px-3.5 text-[10px] font-mono text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-600"
+                    />
+                  </div>
+                  {newEventGmapsLink && !newEventLatitude && (
+                    <p className="text-[9px] text-amber-400 font-semibold bg-amber-500/5 px-2 py-1 rounded border border-amber-500/10">
+                      ⚠️ Link pendek (maps.app.goo.gl) tidak boleh di-parse terus. Sila buka link, salin URL penuh dari browser, kemudian paste di sini. URL penuh mengandungi <code>@lat,lon</code>.
+                    </p>
+                  )}
+                  {newEventLatitude && newEventLongitude && (
+                    <p className="text-[9px] text-emerald-400 font-semibold bg-emerald-500/5 px-2 py-1 rounded border border-emerald-500/10 flex items-center gap-1.5">
+                      ✓ Koordinat berjaya diekstrak: {parseFloat(newEventLatitude).toFixed(6)}°N, {parseFloat(newEventLongitude).toFixed(6)}°E
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-405 font-bold uppercase block">Latitude</label>
+                    <input
+                      type="text"
+                      value={newEventLatitude}
+                      onChange={(e) => setNewEventLatitude(e.target.value)}
+                      placeholder="e.g., 3.1390"
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-405 font-bold uppercase block">Longitude</label>
+                    <input
+                      type="text"
+                      value={newEventLongitude}
+                      onChange={(e) => setNewEventLongitude(e.target.value)}
+                      placeholder="e.g., 101.6869"
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-2.5 pt-3">
@@ -9408,33 +9734,45 @@ function AppContent({
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newEventTitle.trim() || !newEventDate.trim()) {
                       triggerToast('Event Title and Date are required.', 'warning');
                       return;
                     }
-                    const newId = events.length > 0 ? Math.max(...events.map(e => e.id)) + 1 : 1;
-                    const createdEvent: EventItem = {
-                      id: newId,
-                      title: newEventTitle,
-                      date: newEventDate,
-                      location: newEventLocation || 'Kuala Lumpur, Malaysia',
-                      rsvps: 0,
-                      limit: 150,
-                      featured: true,
-                      registered: false,
-                      organizer: newEventOrganizer || 'HQ',
-                      badge: newEventBadge,
-                      image: newEventImage,
-                      category: newEventCategory
-                    };
-                    setEvents([createdEvent, ...events]);
-                    triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
-                    setIsCreateEventModalOpen(false);
-                    setNewEventTitle('');
-                    setNewEventLocation('');
-                    setNewEventDate('');
-                    setNewEventOrganizer('');
+                    try {
+                      const eventData = {
+                        title: newEventTitle,
+                        date: newEventDate,
+                        location: newEventLocation || 'Kuala Lumpur, Malaysia',
+                        rsvps: 0,
+                        limit: 150,
+                        featured: true,
+                        registered: false,
+                        organizer: newEventOrganizer || 'HQ',
+                        badge: newEventBadge || 'OPEN',
+                        image: newEventImage || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+                        category: newEventCategory || 'upcoming',
+                        warningText: '',
+                        creatorId: auth.currentUser?.uid || '',
+                        latitude: newEventLatitude ? Number(newEventLatitude) : 3.1390,
+                        longitude: newEventLongitude ? Number(newEventLongitude) : 101.6869,
+                        gmapsLink: newEventGmapsLink || '',
+                      };
+                      await addDoc(collection(db, 'events'), eventData);
+                      triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
+                    } catch (err: any) {
+                      console.error("Error creating event:", err);
+                      triggerToast(`Failed to create event: ${err.message || err}`, 'error');
+                    } finally {
+                      setIsCreateEventModalOpen(false);
+                      setNewEventTitle('');
+                      setNewEventLocation('');
+                      setNewEventDate('');
+                      setNewEventOrganizer('');
+                      setNewEventLatitude('');
+                      setNewEventLongitude('');
+                      setNewEventGmapsLink('');
+                    }
                   }}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
                 >
@@ -9507,12 +9845,23 @@ function AppContent({
                 <button
                   type="button"
                   disabled={deleteEventConfirmText !== 'DELETE'}
-                  onClick={() => {
-                    setEvents(events.filter(e => e.id !== eventToDelete.id));
-                    triggerToast(`Successfully deleted event "${eventToDelete.title}"`, 'success');
-                    setIsDeleteEventModalOpen(false);
-                    setEventToDelete(null);
-                    setDeleteEventConfirmText('');
+                  onClick={async () => {
+                    try {
+                      if (typeof eventToDelete.id === 'string') {
+                        await deleteDoc(doc(db, 'events', eventToDelete.id));
+                        triggerToast(`Successfully deleted event "${eventToDelete.title}" from database`, 'success');
+                      } else {
+                        setEvents(events.filter(e => e.id !== eventToDelete.id));
+                        triggerToast(`Successfully deleted event "${eventToDelete.title}"`, 'success');
+                      }
+                    } catch (err: any) {
+                      console.error("Error deleting event:", err);
+                      triggerToast(`Failed to delete event: ${err.message || err}`, 'error');
+                    } finally {
+                      setIsDeleteEventModalOpen(false);
+                      setEventToDelete(null);
+                      setDeleteEventConfirmText('');
+                    }
                   }}
                   className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-black text-xs rounded-xl transition uppercase tracking-wider cursor-pointer text-center"
                 >
@@ -9855,7 +10204,7 @@ function AppContent({
 
               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 inline-flex items-center justify-center relative">
                 <QRCodeSVG 
-                  value={generatedQrPayload} 
+                  value={generatedQrPayload.startsWith('http') ? generatedQrPayload : `${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(generatedQrPayload)}`} 
                   size={220} 
                   level="H"
                   includeMargin={false}
@@ -9967,48 +10316,111 @@ function AppContent({
                           setIsSavingContact(true);
                           const { setDoc, getDoc, serverTimestamp, doc } = await import('firebase/firestore');
                           
-                          const qrRef = doc(db, 'qrCodes', parsed.refId);
-                          const qrSnap = await getDoc(qrRef);
-                          if (qrSnap.exists()) {
-                            const qrData = qrSnap.data();
-                            if (qrData.status === 'disabled') {
-                              triggerToast('This QR Code has been disabled by the administrator.', 'error');
-                              await logQRScan('failed', `Failed check-in: QR code '${parsed.name || parsed.refId}' is disabled`, scanResult);
-                              setIsSavingContact(false);
-                              return;
-                            }
-                            if (qrData.expiresAt) {
-                              const expiryDate = qrData.expiresAt.toDate ? qrData.expiresAt.toDate() : new Date(qrData.expiresAt);
-                              if (new Date() > expiryDate) {
-                                triggerToast('This QR Code has expired.', 'error');
-                                await logQRScan('failed', `Failed check-in: QR code '${parsed.name || parsed.refId}' has expired`, scanResult);
-                                setIsSavingContact(false);
-                                return;
-                              }
-                            }
+                          // Enforce Geolocation check
+                          if (!navigator.geolocation) {
+                            triggerToast('Penyemak imbas anda tidak menyokong Geolocation. Akses GPS diperlukan untuk Geofencing.', 'error');
+                            await logQRScan('failed', 'Failed check-in: Browser lacks Geolocation support', scanResult);
+                            setIsSavingContact(false);
+                            return;
                           }
 
-                          // Ensure parent document exists with proper metadata
-                          await setDoc(doc(db, 'attendance', parsed.refId), {
-                            title: parsed.name || 'Untitled Session',
-                            context: parsed.context || 'general',
-                            createdAt: new Date().toISOString(),
-                            type: 'attendance',
-                            updatedAt: new Date().toISOString()
-                          }, { merge: true });
+                          navigator.geolocation.getCurrentPosition(
+                            async (position) => {
+                              const memberLat = position.coords.latitude;
+                              const memberLon = position.coords.longitude;
 
-                          await setDoc(doc(db, 'attendance', parsed.refId, 'attendees', auth.currentUser!.uid), {
-                            uid: auth.currentUser!.uid,
-                            name: displayName,
-                            mvocId: displayMvocId,
-                            vehiclePlate: userProfile?.vehiclePlate || 'NO PLATE',
-                            timestamp: serverTimestamp()
-                          });
+                              try {
+                                let eventCoords: { latitude: number; longitude: number } | null = null;
+                                let eventTitle = parsed.name || 'Untitled Event';
 
-                          await logQRScan('success', `Checked in successfully: ${parsed.name || 'Untitled Attendance Session'}`, scanResult);
-                          triggerToast('Attendance successfully recorded!', 'success');
-                          setIsScannerOpen(false);
-                          setIsSavingContact(false);
+                                // Fetch event location details from Firestore
+                                const eventRef = doc(db, 'events', parsed.refId);
+                                const eventSnap = await getDoc(eventRef);
+                                if (eventSnap.exists()) {
+                                  const evData = eventSnap.data();
+                                  eventTitle = evData.title || eventTitle;
+                                  if (evData.latitude !== undefined && evData.longitude !== undefined) {
+                                    eventCoords = { latitude: Number(evData.latitude), longitude: Number(evData.longitude) };
+                                  }
+                                } else {
+                                  // Fallback to local events list
+                                  const localEv = events.find(e => String(e.id) === String(parsed.refId));
+                                  if (localEv) {
+                                    eventTitle = localEv.title;
+                                    if (localEv.latitude !== undefined && localEv.longitude !== undefined) {
+                                      eventCoords = { latitude: localEv.latitude, longitude: localEv.longitude };
+                                    }
+                                  }
+                                }
+
+                                // Verify distance if event coordinates are set
+                                if (eventCoords) {
+                                  const dist = calculateDistance(memberLat, memberLon, eventCoords.latitude, eventCoords.longitude);
+                                  if (dist > 200) {
+                                    triggerToast(`Ralat Geofencing: Lokasi anda terlalu jauh (${(dist / 1000).toFixed(2)} km) dari tapak acara. Had dibenarkan: 200m.`, 'error');
+                                    await logQRScan('failed', `Geofencing Gagal: Ahli di luar sempadan (${Math.round(dist)}m) bagi acara ${eventTitle}`, scanResult);
+                                    setIsSavingContact(false);
+                                    return;
+                                  }
+                                }
+
+                                // Normal status and expiration checks
+                                const qrRef = doc(db, 'qrCodes', parsed.refId);
+                                const qrSnap = await getDoc(qrRef);
+                                if (qrSnap.exists()) {
+                                  const qrData = qrSnap.data();
+                                  if (qrData.status === 'disabled') {
+                                    triggerToast('This QR Code has been disabled by the administrator.', 'error');
+                                    await logQRScan('failed', `Failed check-in: QR code '${eventTitle}' is disabled`, scanResult);
+                                    setIsSavingContact(false);
+                                    return;
+                                  }
+                                  if (qrData.expiresAt) {
+                                    const expiryDate = qrData.expiresAt.toDate ? qrData.expiresAt.toDate() : new Date(qrData.expiresAt);
+                                    if (new Date() > expiryDate) {
+                                      triggerToast('This QR Code has expired.', 'error');
+                                      await logQRScan('failed', `Failed check-in: QR code '${eventTitle}' has expired`, scanResult);
+                                      setIsSavingContact(false);
+                                      return;
+                                    }
+                                  }
+                                }
+
+                                // Ensure parent document exists with proper metadata
+                                await setDoc(doc(db, 'attendance', parsed.refId), {
+                                  title: eventTitle,
+                                  context: parsed.context || 'general',
+                                  createdAt: new Date().toISOString(),
+                                  type: 'attendance',
+                                  updatedAt: new Date().toISOString()
+                                }, { merge: true });
+
+                                await setDoc(doc(db, 'attendance', parsed.refId, 'attendees', auth.currentUser!.uid), {
+                                  uid: auth.currentUser!.uid,
+                                  name: displayName,
+                                  mvocId: displayMvocId,
+                                  vehiclePlate: userProfile?.vehiclePlate || 'NO PLATE',
+                                  timestamp: serverTimestamp(),
+                                  gpsLocation: { lat: memberLat, lon: memberLon }
+                                });
+
+                                await logQRScan('success', `Checked in successfully (Geofenced Scan): ${eventTitle}`, scanResult);
+                                triggerToast('Attendance successfully recorded!', 'success');
+                                setIsScannerOpen(false);
+                              } catch (err: any) {
+                                triggerToast(`Failed to register: ${err.message || String(err)}`, 'error');
+                              } finally {
+                                setIsSavingContact(false);
+                              }
+                            },
+                            async (err) => {
+                              console.warn('Geolocation member error:', err);
+                              triggerToast('Gagal mendapatkan lokasi GPS anda. Akses GPS diperlukan untuk mengesahkan kehadiran.', 'error');
+                              await logQRScan('failed', 'Failed check-in: Member GPS access denied or timed out', scanResult);
+                              setIsSavingContact(false);
+                            },
+                            { enableHighAccuracy: true, timeout: 8000 }
+                          );
                           return;
                         }
 

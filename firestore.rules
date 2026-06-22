@@ -163,7 +163,14 @@ service cloud.firestore {
     // Events meetup collection
     match /events/{eventId} {
       allow read: if isNotSuspended() && isSignedIn();
-      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
+      allow create: if isNotSuspended() && isAdminOrSuperAdmin() && (
+        request.resource.data.get('creatorId', '') == request.auth.uid
+      );
+      allow update: if isNotSuspended() && isAdminOrSuperAdmin();
+      allow delete: if isNotSuspended() && (
+        isSuperAdmin() || 
+        (resource.data.get('creatorId', '') == request.auth.uid)
+      );
     }
 
     // QR Codes meta-collection
