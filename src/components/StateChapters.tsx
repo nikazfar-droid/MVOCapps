@@ -159,6 +159,26 @@ export default function StateChapters({
     return () => unsub();
   }, []);
 
+  // Listen to open-edit-chapter event from App.tsx
+  useEffect(() => {
+    const handleOpenEdit = (e: any) => {
+      if (e.detail?.chapterId) {
+        const item = chaptersList.find(c => c.id === e.detail.chapterId);
+        if (item) {
+          setEditingChapterId(item.id);
+          setEditedFields({
+            name: item.name || '',
+            subText: item.subText || '',
+            meetupRoutine: item.meetupRoutine || '',
+            activeMemberPlate: item.activeMemberPlate || ''
+          });
+        }
+      }
+    };
+    window.addEventListener('open-edit-chapter', handleOpenEdit);
+    return () => window.removeEventListener('open-edit-chapter', handleOpenEdit);
+  }, [chaptersList]);
+
   const getActualMemberCount = (chapterItem: ChapterItem): number => {
     if (!usersList || usersList.length === 0) {
       return chapterItem.membersCount || 0;
@@ -579,12 +599,13 @@ export default function StateChapters({
     return () => unsub();
   }, [selectedChapterIdToManage]);
 
-  const getZoneForChapter = (chapterName: string): string => {
-    const name = chapterName.toLowerCase();
+  const getZoneForChapter = (chapter: any): string => {
+    const name = ((chapter?.name || '') + ' ' + (chapter?.subText || '')).toLowerCase();
     if (name.includes('sabah') || name.includes('sarawak') || name.includes('brunei') || name.includes('labuan')) {
       return 'Zone Borneo';
     }
-    if (name.includes('selangor') || name.includes('kuala lumpur') || name.includes('klang') || name.includes('wp') || name.includes('w.p.') || name.includes('putrajaya')) {
+    // Check KL/Putrajaya/Selangor first, ensuring 'wp'/'w.p.' doesn't mistakenly match other W.P. locations like Labuan if Labuan wasn't caught
+    if (name.includes('selangor') || name.includes('kuala lumpur') || name.includes('klang') || name.includes('putrajaya') || (name.includes('wp') && !name.includes('labuan')) || (name.includes('w.p.') && !name.includes('labuan'))) {
       return 'Zone Klang Valley';
     }
     if (name.includes('kelantan') || name.includes('terengganu') || name.includes('pahang')) {
@@ -601,7 +622,7 @@ export default function StateChapters({
 
   const isChapterAdminInZone = (zoneName: string): boolean => {
     if (!auth.currentUser) return false;
-    return chaptersList.some(c => getZoneForChapter(c.name) === zoneName && c.adminId === auth.currentUser?.uid);
+    return chaptersList.some(c => getZoneForChapter(c) === zoneName && c.adminId === auth.currentUser?.uid);
   };
 
   // Filter items based on active search queries
@@ -934,7 +955,7 @@ export default function StateChapters({
               };
 
               filteredChapters.forEach((item) => {
-                const zone = getZoneForChapter(item.name);
+                const zone = getZoneForChapter(item);
                 if (groupedChapters[zone]) {
                   groupedChapters[zone].push(item);
                 } else {
@@ -1158,95 +1179,7 @@ export default function StateChapters({
                                 className="relative overflow-hidden bg-white rounded-2xl border border-slate-205 p-5 shadow-xs flex flex-col justify-between min-h-[250px] transition hover:border-[#adc8f5]"
                                 id={`chapter-card-${item.id}`}
                               >
-                                {editingChapterId === item.id ? (
-                                  /* INLINE EDIT MODE */
-                                  <div className="flex flex-col h-full justify-between text-left" id={`chapter-card-edit-${item.id}`}>
-                                    <div className="space-y-2.5">
-                                      <div className="flex justify-between items-center pb-1 border-b border-slate-100">
-                                        <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">
-                                          Edit Chapter Info
-                                        </span>
-                                        <span className="text-[10px] bg-slate-100 text-slate-650 px-2.5 py-0.5 rounded font-black select-none uppercase">
-                                          Chapter {item.id}
-                                        </span>
-                                      </div>
-
-                                      <div>
-                                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
-                                          Chapter Name
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={editedFields.name}
-                                          onChange={(e) => setEditedFields({ ...editedFields, name: e.target.value })}
-                                          className="w-full bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-850 font-extrabold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-3xs"
-                                          placeholder="E.g. Selangor Chapter"
-                                          required
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
-                                          Motto / Sub-headline
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={editedFields.subText}
-                                          onChange={(e) => setEditedFields({ ...editedFields, subText: e.target.value })}
-                                          className="w-full bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-850 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-3xs"
-                                          placeholder="E.g. United and Driven"
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
-                                          Meetup Routine
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={editedFields.meetupRoutine}
-                                          onChange={(e) => setEditedFields({ ...editedFields, meetupRoutine: e.target.value })}
-                                          className="w-full bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-850 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-3xs"
-                                          placeholder="E.g. Monthly meetup on Sunday mornings"
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
-                                          Active Member Plate Number
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={editedFields.activeMemberPlate}
-                                          onChange={(e) => setEditedFields({ ...editedFields, activeMemberPlate: e.target.value })}
-                                          className="w-full bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-850 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-3xs"
-                                          placeholder="E.g. VCD 8834"
-                                        />
-                                      </div>
-                                    </div>
-
-                                    {/* Action buttons with 40px height for mobile ergonomics */}
-                                    <div className="flex gap-2.5 pt-4 select-none mt-4 border-t border-slate-50">
-                                      <button
-                                        onClick={() => handleSaveInlineEdit(item)}
-                                        disabled={isSavingInline}
-                                        className="flex-1 bg-emerald-605 hover:bg-emerald-700 text-white font-extrabold h-[40px] min-h-[40px] rounded-xl flex items-center justify-center gap-1.5 text-xs cursor-pointer transition active:scale-98 shadow-sm disabled:opacity-50 select-none"
-                                      >
-                                        <Check className="w-3.5 h-3.5 shrink-0" />
-                                        <span>{isSavingInline ? 'Saving...' : 'Save'}</span>
-                                      </button>
-                                      <button
-                                        onClick={() => setEditingChapterId(null)}
-                                        disabled={isSavingInline}
-                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold h-[40px] min-h-[40px] rounded-xl flex items-center justify-center gap-1.5 text-xs cursor-pointer transition active:scale-98 border border-slate-205 select-none"
-                                      >
-                                        <X className="w-3.5 h-3.5 shrink-0" />
-                                        <span>Cancel</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  /* STANDARD VIEW */
+                                  {/* STANDARD VIEW */}
                                   <>
                                     <div>
                                       {/* Top Row: Flag & Pill & Edit trigger button */}
@@ -1403,7 +1336,6 @@ export default function StateChapters({
                                       />
                                     </div>
                                   </>
-                                )}
                               </div>
                             );
                           })
@@ -1826,6 +1758,112 @@ export default function StateChapters({
                 className="w-1/2 py-2.5 bg-[#000000] hover:bg-slate-850 disabled:opacity-40 text-white font-extrabold text-xs rounded-xl transition uppercase tracking-wider cursor-pointer text-center"
               >
                 {isSavingEdit ? 'Saving Info...' : 'Save Info'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CHAPTER INFO MODAL (REPLACING INLINE EDIT) */}
+      {editingChapterId && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div 
+            onClick={() => setEditingChapterId(null)}
+            className="absolute inset-0 bg-[#001835]/80 backdrop-blur-sm cursor-pointer transition-opacity"
+          />
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden p-6 md:p-8 z-10 space-y-6 text-left text-black border border-slate-200 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+              <div className="flex items-center gap-3 text-slate-800">
+                <div className="p-2.5 bg-emerald-50 rounded-xl">
+                  <Edit className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h4 className="text-lg md:text-xl font-black uppercase tracking-wide text-[#0f2d52]">Edit Chapter Info</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-0.5">Update details for {chaptersList.find(c => c.id === editingChapterId)?.name || 'Chapter'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingChapterId(null)}
+                className="p-2.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto pr-2 pb-2 flex-1 min-h-0 space-y-5 custom-scrollbar">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
+                  Chapter Name
+                </label>
+                <input
+                  type="text"
+                  value={editedFields.name}
+                  onChange={(e) => setEditedFields({ ...editedFields, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded-xl px-4 py-3.5 text-sm text-slate-850 font-extrabold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                  placeholder="E.g. Selangor Chapter"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
+                  Motto / Sub-headline
+                </label>
+                <input
+                  type="text"
+                  value={editedFields.subText}
+                  onChange={(e) => setEditedFields({ ...editedFields, subText: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded-xl px-4 py-3.5 text-sm text-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                  placeholder="E.g. United and Driven"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
+                  Meetup Routine
+                </label>
+                <input
+                  type="text"
+                  value={editedFields.meetupRoutine}
+                  onChange={(e) => setEditedFields({ ...editedFields, meetupRoutine: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded-xl px-4 py-3.5 text-sm text-slate-850 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                  placeholder="E.g. Monthly meetup on Sunday mornings"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1 select-none">
+                  Active Member Plate Number
+                </label>
+                <input
+                  type="text"
+                  value={editedFields.activeMemberPlate}
+                  onChange={(e) => setEditedFields({ ...editedFields, activeMemberPlate: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded-xl px-4 py-3.5 text-sm text-slate-850 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
+                  placeholder="E.g. VCD 8834"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-5 border-t border-slate-100 shrink-0">
+              <button
+                onClick={() => setEditingChapterId(null)}
+                disabled={isSavingInline}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold h-[52px] rounded-xl flex items-center justify-center gap-2 text-sm cursor-pointer transition active:scale-95 select-none"
+              >
+                <X className="w-5 h-5 shrink-0" />
+                <span>Cancel</span>
+              </button>
+              <button
+                onClick={() => {
+                  const chapterItem = chaptersList.find(c => c.id === editingChapterId);
+                  if (chapterItem) handleSaveInlineEdit(chapterItem);
+                }}
+                disabled={isSavingInline}
+                className="flex-[2] bg-[#0f2d52] hover:bg-[#001835] text-white font-extrabold h-[52px] rounded-xl flex items-center justify-center gap-2 text-sm cursor-pointer transition active:scale-95 shadow-md disabled:opacity-50 select-none"
+              >
+                <Check className="w-5 h-5 shrink-0" />
+                <span>{isSavingInline ? 'Saving Changes...' : 'Save Changes'}</span>
               </button>
             </div>
           </div>

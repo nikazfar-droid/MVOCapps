@@ -3704,7 +3704,7 @@ function AppContent({
           </nav>
 
           {/* BACKGROUND BACKGROUND LAYOUT VIEW CONTROLLER */}
-          <main className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-md mx-auto px-4 pt-6 pb-24">
+          <main className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-md md:max-w-full lg:max-w-5xl mx-auto px-4 md:px-8 pt-6 md:pt-8 pb-24">
             <AnimatePresence mode="wait">
               
               {/* TAB 1: DASHBOARD VIEW */}
@@ -9386,7 +9386,7 @@ function AppContent({
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 z-10 max-h-[90vh] flex flex-col text-left font-sans"
+                className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 z-10 max-h-[90vh] flex flex-col text-left font-sans"
               >
                 <div className="h-1.5 w-full bg-[#0F2D52]" />
 
@@ -9398,69 +9398,69 @@ function AppContent({
                   <X className="w-4 h-4" />
                 </button>
 
-                <div className="overflow-y-auto flex-1 p-6 space-y-4">
+                <div className="overflow-y-auto flex-1 p-6 md:p-8 space-y-5">
                   {/* Chapter title and badge */}
                   <div>
-                    <span className="text-[9.5px] font-black uppercase tracking-widest bg-blue-50 text-[#0F2D52] border border-blue-105/30 px-2.5 py-1 rounded-md inline-block select-none">
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-[#0F2D52] border border-blue-105/30 px-3 py-1.5 rounded-md inline-block select-none">
                       {activeItem.region} Chapter Registry
                     </span>
-                    <h3 className="text-lg font-black text-[#0F2D52] tracking-tight leading-none mt-2">
+                    <h3 className="text-xl md:text-2xl font-black text-[#0F2D52] tracking-tight leading-none mt-3">
                       {activeItem.name} Assembly
                     </h3>
                     {activeItem.subText && (
-                      <p className="text-xs text-[#0f2d52]/80 mt-1.5 font-medium italic border-l-2 border-blue-300 pl-2">
+                      <p className="text-sm text-[#0f2d52]/80 mt-2 font-medium italic border-l-2 border-blue-300 pl-3">
                         "{activeItem.subText}"
                       </p>
                     )}
                   </div>
 
                   {/* Chapter description */}
-                  <div className="space-y-1">
-                     <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block">
+                  <div className="space-y-1.5">
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                        Chapter Description
                      </span>
-                     <p className="text-xs text-slate-600 leading-relaxed font-medium bg-slate-50 border border-slate-100 p-3 rounded-2xl">
+                     <p className="text-sm text-slate-600 leading-relaxed font-medium bg-slate-50 border border-slate-100 p-4 rounded-2xl">
                        {activeItem.description || 'No description provided yet.'}
                      </p>
                   </div>
 
                   {/* Chapter details list */}
-                  <div className="space-y-3.5 text-xs text-left">
+                  <div className="space-y-4 text-sm text-left">
                     {/* Routine schedule */}
-                    <div className="space-y-1">
-                      <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block">
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                         Weekly / Monthly Meetup Routine
                       </span>
-                      <span className="text-xs font-black text-slate-800 block leading-normal bg-blue-50/50 p-2.5 rounded-xl border border-blue-105/10">
+                      <span className="text-sm font-black text-slate-800 block leading-normal bg-blue-50/50 p-3.5 rounded-xl border border-blue-105/10">
                         {activeItem.meetupRoutine || 'No routine provided yet.'}
                       </span>
                     </div>
 
                     {/* Member counts */}
-                    <div className="flex justify-between items-center py-2 border-t border-b border-dashed border-slate-200">
+                    <div className="flex justify-between items-center py-3 border-t border-b border-dashed border-slate-200">
                       <div>
-                        <span className="text-[9.5px] font-black text-slate-400 uppercase block select-none">
+                        <span className="text-[10px] font-black text-slate-400 uppercase block select-none">
                           Active Chapter Members
                         </span>
-                        <span className="text-base font-black text-[#0F2D52] block mt-0.5">
+                        <span className="text-lg md:text-xl font-black text-[#0F2D52] block mt-1">
                           {activeItem.membersCount.toLocaleString()} Verified Leads
                         </span>
                       </div>
-                      <div className="p-2 py-1.5 bg-blue-50 text-blue-700 font-extrabold text-[10px] rounded-lg border border-blue-100">
+                      <div className="p-2.5 py-1.5 bg-blue-50 text-blue-700 font-extrabold text-[11px] rounded-lg border border-blue-100 uppercase">
                         {activeItem.isHQ ? 'CHAPTER HQ' : 'ACTIVE CLUSTER'}
                       </div>
                     </div>
 
                     {/* Registered car plates */}
-                    <div className="space-y-1.5">
-                      <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block select-none">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block select-none">
                         Active Chapter Vehicles Registered Inside Feed
                       </span>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-2">
                         {activeItem.registeredCars.map((plate) => (
                           <span
                             key={plate}
-                            className="bg-slate-100 border border-slate-205 text-slate-700 font-mono text-[10.5px] font-black tracking-wider px-2 py-1 rounded"
+                            className="bg-slate-100 border border-slate-205 text-slate-700 font-mono text-[11.5px] font-black tracking-wider px-3 py-1.5 rounded-lg"
                           >
                             {plate}
                           </span>
@@ -9470,13 +9470,27 @@ function AppContent({
                   </div>
 
                   {/* Action items: Join Toggle / Quit Toggle */}
-                  <div className="space-y-2 pt-2">
+                  <div className="flex gap-3 pt-4 border-t border-slate-100">
                     <button
                       onClick={() => setSelectedChapterDetailId(null)}
-                      className="w-full py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-black hover:bg-slate-50 transition-colors min-h-[38px] cursor-pointer text-center"
+                      className="flex-1 py-3.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-sm font-black hover:bg-slate-200 transition-colors cursor-pointer text-center"
                     >
                       Dismiss View
                     </button>
+                    {(isSuperAdmin || (auth.currentUser && activeItem.adminId === auth.currentUser.uid)) && (
+                      <button
+                        onClick={() => {
+                          setSelectedChapterDetailId(null);
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('open-edit-chapter', { detail: { chapterId: activeItem.id } }));
+                          }, 300);
+                        }}
+                        className="flex-1 py-3.5 bg-[#0F2D52] text-white rounded-xl text-sm font-black hover:bg-[#184172] transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        <span>Edit Info</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>

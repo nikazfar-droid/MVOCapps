@@ -158,6 +158,7 @@ export default function AdminDashboard({
   const [newChapter, setNewChapter] = useState('Zone Klang Valley');
   const [newTier, setNewTier] = useState<'GOLD' | 'STANDARD'>('STANDARD');
   const [newRole, setNewRole] = useState<'super_admin' | 'admin' | 'member'>('member');
+  const [membersCurrentPage, setMembersCurrentPage] = useState(1);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'analytics'>('directory');
 
@@ -246,6 +247,11 @@ export default function AdminDashboard({
   };
 
   // User tab filtering logic
+  // Reset pagination when search or filters change
+  useEffect(() => {
+    setMembersCurrentPage(1);
+  }, [userSearchQuery, roleFilter, statusFilter]);
+
   const filteredUsers = membersList.filter(u => {
     // 1. Filter by role attribute
     if (roleFilter !== 'all') {
@@ -463,7 +469,18 @@ export default function AdminDashboard({
     }
   };
 
-  const renderUserTable = (usersList: SyncedUserProfile[], emptyMessage: string, tableTitle: string, emoji: string) => {
+  const renderUserTable = (
+    usersList: SyncedUserProfile[], 
+    emptyMessage: string, 
+    tableTitle: string, 
+    emoji: string,
+    pagination?: { current: number; set: (p: number) => void; limit: number }
+  ) => {
+    const totalPages = pagination ? Math.max(1, Math.ceil(usersList.length / pagination.limit)) : 1;
+    const displayList = pagination 
+      ? usersList.slice((pagination.current - 1) * pagination.limit, pagination.current * pagination.limit)
+      : usersList;
+
     return (
       <div className="mb-8">
         <h3 className="flex items-center gap-2 text-[#0f2d52] font-display font-extrabold text-lg mb-3">
@@ -476,7 +493,7 @@ export default function AdminDashboard({
             <thead>
               <tr className="bg-[#f8f9ff] border-b border-slate-200 text-slate-500 h-[38px] select-none">
                 <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[16%]">Name</th>
-                <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[18%]">Email</th>
+                <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[18%]">Nickname</th>
                 <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[14%]">MVOC ID</th>
                 <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[16%]">Role</th>
                 <th className="py-1 px-3 text-[10px] font-extrabold uppercase tracking-widest w-[10%]">Status</th>
@@ -485,7 +502,7 @@ export default function AdminDashboard({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {usersList.length === 0 ? (
+              {displayList.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center bg-slate-50/50">
                     <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">{emptyMessage}</p>
@@ -493,7 +510,7 @@ export default function AdminDashboard({
                   </td>
                 </tr>
               ) : (
-                usersList.map((u, idx) => {
+                displayList.map((u, idx) => {
                   const isSelf = u.email.toLowerCase() === displayEmail.toLowerCase();
                   const isSuspended = u.status === 'suspended' || u.status === 'banned';
                   const isRowMasterAdmin = u.mvocId === MASTER_ADMIN_ID || u.email.toLowerCase() === MASTER_EMAIL;
@@ -542,10 +559,10 @@ export default function AdminDashboard({
                         </div>
                       </td>
 
-                      {/* Column 2: Email */}
+                      {/* Column 2: Nickname */}
                       <td className="py-1 px-3 truncate">
-                        <span className="text-[11px] text-slate-500 font-medium font-mono tracking-wide truncate block">
-                          {u.email}
+                        <span className="text-[11px] text-slate-500 font-extrabold tracking-wide truncate block">
+                          {u.shortName || '-'}
                         </span>
                       </td>
 
@@ -713,6 +730,34 @@ export default function AdminDashboard({
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {pagination && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+            <span className="text-[11px] font-bold text-slate-500">
+              Showing {(pagination.current - 1) * pagination.limit + 1} to {Math.min(pagination.current * pagination.limit, usersList.length)} of {usersList.length} members
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => pagination.set(Math.max(1, pagination.current - 1))}
+                disabled={pagination.current === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="text-[11px] font-extrabold text-[#0f2d52] min-w-[3rem] text-center">
+                {pagination.current} / {totalPages}
+              </span>
+              <button
+                onClick={() => pagination.set(Math.min(totalPages, pagination.current + 1))}
+                disabled={pagination.current === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -983,8 +1028,12 @@ export default function AdminDashboard({
 
         <div className="w-full h-px bg-slate-200/50 my-2"></div>
 
-        {/* Table 2: General Club Registry */}
-        {renderUserTable(memberList, 'No general club members found.', 'General Club Registry', '🚗')}
+        {/* Table 2: Community Members (Paginated) */}
+        {renderUserTable(memberList, 'No community members found.', 'Community Members', '🚗', {
+          current: membersCurrentPage,
+          set: setMembersCurrentPage,
+          limit: 10
+        })}
 
         {/* Policy Notice banner */}
         <div className="bg-[#eff4ff] border border-[#adc8f5] rounded-xl p-4 flex items-start gap-3">
