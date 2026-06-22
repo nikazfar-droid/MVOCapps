@@ -124,13 +124,7 @@ export default function StateChapters({
 }: StateChaptersProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'browse' | 'manage'>('browse');
-  const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({
-    'Zone Klang Valley': true,
-    'Zone Utara': true,
-    'Zone Borneo': true,
-    'Zone Pantai Timur': true,
-    'Zone Selatan': true,
-  });
+  const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({});
 
   // Managed Chapter Admin details
   const [selectedChapterIdToManage, setSelectedChapterIdToManage] = useState<string>('');
@@ -976,7 +970,7 @@ export default function StateChapters({
                 // If there is an active search query, and this zone has no matching chapters, hide the zone header entirely for a clean UI
                 if (searchQuery && chaptersInZone.length === 0) return null;
 
-                const isExpanded = expandedZones[zone] !== false;
+                const isExpanded = expandedZones[zone] === true;
 
                 return (
                   <div key={zone} className="space-y-3" id={`zone-section-${zone.replace(/\s+/g, '-').toLowerCase()}`}>
