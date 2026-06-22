@@ -166,7 +166,13 @@ service cloud.firestore {
       allow create: if isNotSuspended() && isAdminOrSuperAdmin() && (
         request.resource.data.get('creatorId', '') == request.auth.uid
       );
-      allow update: if isNotSuspended() && isAdminOrSuperAdmin();
+      allow update: if isNotSuspended() && (
+        isSuperAdmin() || (
+          isAdminOrSuperAdmin() &&
+          resource.data.get('creatorId', '') == request.auth.uid &&
+          request.resource.data.get('creatorId', '') == request.auth.uid
+        )
+      );
       allow delete: if isNotSuspended() && (
         isSuperAdmin() || 
         (resource.data.get('creatorId', '') == request.auth.uid)

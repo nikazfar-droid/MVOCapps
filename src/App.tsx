@@ -86,7 +86,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import PWAInstaller from './components/PWAInstaller';
 import PWAUpdateNotifier from './components/PWAUpdateNotifier';
 import { auth, db } from './lib/firebase';
-import { collection, updateDoc, doc, deleteDoc, onSnapshot, setDoc, runTransaction, getDocsFromServer, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, updateDoc, doc, deleteDoc, onSnapshot, setDoc, runTransaction, getDocsFromServer, query, where, orderBy, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { SyncedUserProfile, formatMvocId } from './lib/fetchAndSyncData';
 import { formatWhatsAppNumber, isValidWhatsAppNumber } from './lib/phoneUtils';
 import { getTranslation } from './lib/translations';
@@ -100,6 +100,8 @@ import mvocPremiumBack from './assets/images/mvoc-premium-back.png';
 
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { QRCodeSVG } from 'qrcode.react';
+import useEmblaCarousel from 'embla-carousel-react';
+import Autoplay from 'embla-carousel-autoplay';
 
 // Define core constants
 export const MASTER_ADMIN_ID = 'MVOC-0001';
@@ -116,6 +118,21 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+function parseEventDate(dateStr: string): number {
+  try {
+    const timestamp = Date.parse(dateStr);
+    if (!isNaN(timestamp)) {
+      return timestamp;
+    }
+    const cleaned = dateStr.split('•')[0].trim();
+    const ts2 = Date.parse(cleaned);
+    if (!isNaN(ts2)) {
+      return ts2;
+    }
+  } catch {}
+  return Date.now();
 }
 
 // Define core types
@@ -141,7 +158,7 @@ interface Announcement {
 }
 
 interface EventItem {
-  id: number;
+  id: string | number;
   title: string;
   date: string;
   location: string;
@@ -157,6 +174,7 @@ interface EventItem {
   creatorId?: string;
   latitude?: number;
   longitude?: number;
+  gmapsLink?: string;
 }
 
 export default function App() {
@@ -1098,7 +1116,7 @@ function AppContent({
   }, [selectedEventId]);
 
   const [activeEventSubTab, setActiveEventSubTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
-  const [bookmarkedEvents, setBookmarkedEvents] = useState<number[]>([1]);
+  const [bookmarkedEvents, setBookmarkedEvents] = useState<(string | number)[]>([1]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   // System modules live config state (Default true)
@@ -1706,15 +1724,7 @@ function AppContent({
     }
   ];
 
-  const [events, setEvents] = useState<EventItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('mvoc_deleted_event_ids');
-      const deletedIds = saved ? JSON.parse(saved) : [];
-      return DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
-    } catch {
-      return DEFAULT_SAMPLE_EVENTS;
-    }
-  });
+  const [events, setEvents] = useState<EventItem[]>([]);
 
   // lifted Gallery Albums to top-level state for real-time interactivity & deletion
   const [galleryAlbums, setGalleryAlbums] = useState([
@@ -1946,6 +1956,7 @@ function AppContent({
   const [isDeleteEventModalOpen, setIsDeleteEventModalOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<any | null>(null);
   const [deleteEventConfirmText, setDeleteEventConfirmText] = useState('');
+  const [editingEventId, setEditingEventId] = useState<string | number | null>(null);
   
   // Event inputs form
   const [newEventTitle, setNewEventTitle] = useState('');
@@ -2105,6 +2116,23 @@ function AppContent({
   // Events state synchronization with Firestore
   const [firestoreEvents, setFirestoreEvents] = useState<EventItem[]>([]);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { loop: true },
+    [Autoplay({ delay: 5000, stopOnInteraction: false })]
+  );
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => {
+      setCurrentEventIndex(emblaApi.selectedScrollSnap());
+    };
+    emblaApi.on('select', onSelect);
+    emblaApi.on('reInit', onSelect);
+    return () => {
+      emblaApi.off('select', onSelect);
+      emblaApi.off('reInit', onSelect);
+    };
+  }, [emblaApi]);
 
   // Listen to remote events
   useEffect(() => {
@@ -2115,56 +2143,60 @@ function AppContent({
     try {
       const eventsRef = collection(db, 'events');
       const unsubscribe = onSnapshot(eventsRef, (snapshot) => {
-        let deletedIds: (string | number)[] = [];
-        try {
-          const saved = localStorage.getItem('mvoc_deleted_event_ids');
-          deletedIds = saved ? JSON.parse(saved) : [];
-        } catch (e) {
-          console.warn("Failed to load deleted event IDs:", e);
+        if (snapshot.empty && localStorage.getItem('mvoc_events_seeded') !== 'true') {
+          localStorage.setItem('mvoc_events_seeded', 'true');
+          DEFAULT_SAMPLE_EVENTS.forEach(async (e) => {
+            await addDoc(collection(db, 'events'), {
+              title: e.title,
+              date: e.date,
+              location: e.location,
+              rsvps: e.rsvps,
+              limit: e.limit,
+              featured: e.featured,
+              registered: e.registered,
+              organizer: e.organizer,
+              badge: e.badge,
+              image: e.image,
+              category: e.category,
+              warningText: e.warningText || '',
+              creatorId: 'system-seed',
+              latitude: e.latitude,
+              longitude: e.longitude,
+              gmapsLink: e.gmapsLink || ''
+            });
+          });
+          return;
         }
 
         const list: EventItem[] = [];
         snapshot.forEach((docSnap) => {
           const docData = docSnap.data();
           const docId = docSnap.id;
-          if (!deletedIds.includes(docId)) {
-            list.push({
-              id: docId as any,
-              title: docData.title || '',
-              date: docData.date || '',
-              location: docData.location || '',
-              rsvps: docData.rsvps || 0,
-              limit: docData.limit || 150,
-              featured: docData.featured !== false,
-              registered: docData.registered || false,
-              organizer: docData.organizer || 'HQ',
-              badge: docData.badge || 'OPEN',
-              image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
-              category: docData.category || 'upcoming',
-              warningText: docData.warningText || '',
-              creatorId: docData.creatorId || '',
-              latitude: docData.latitude ? Number(docData.latitude) : undefined,
-              longitude: docData.longitude ? Number(docData.longitude) : undefined
-            });
-          }
+          list.push({
+            id: docId,
+            title: docData.title || '',
+            date: docData.date || '',
+            location: docData.location || '',
+            rsvps: docData.rsvps || 0,
+            limit: docData.limit || 150,
+            featured: docData.featured !== false,
+            registered: docData.registered || false,
+            organizer: docData.organizer || 'HQ',
+            badge: docData.badge || 'OPEN',
+            image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+            category: docData.category || 'upcoming',
+            warningText: docData.warningText || '',
+            creatorId: docData.creatorId || '',
+            latitude: docData.latitude ? Number(docData.latitude) : undefined,
+            longitude: docData.longitude ? Number(docData.longitude) : undefined,
+            gmapsLink: docData.gmapsLink || ''
+          });
         });
         setFirestoreEvents(list);
-        
-        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
-        if (list.length > 0) {
-          setEvents(list);
-        } else {
-          setEvents(activeSampleEvents);
-        }
+        setEvents(list);
       }, (error) => {
         console.error("Error listening to events:", error);
-        let deletedIds: (string | number)[] = [];
-        try {
-          const saved = localStorage.getItem('mvoc_deleted_event_ids');
-          deletedIds = saved ? JSON.parse(saved) : [];
-        } catch (e) {}
-        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
-        setEvents(activeSampleEvents);
+        setEvents([]);
       });
       return () => unsubscribe();
     } catch (e) {
@@ -2172,14 +2204,23 @@ function AppContent({
     }
   }, [isLoggedIn]);
 
-  // Next Major Event carousel data with dynamic priority logic
+  // Next Major Event carousel data with ongoing first and upcoming sorted chronologically
+  // Frequencies: 2 out of 3 slide rotations must show ongoing events if ongoing events exist.
   const sliderEvents = useMemo(() => {
     const active = events.filter(e => e.category !== 'completed');
     const ongoing = active.filter(e => e.category === 'ongoing');
     const upcoming = active.filter(e => e.category === 'upcoming' || !e.category);
     
+    // Sort upcoming chronologically
+    upcoming.sort((a, b) => {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      return parseEventDate(dateA) - parseEventDate(dateB);
+    });
+
     if (ongoing.length === 0) {
-      return upcoming.length > 0 ? upcoming : [
+      if (upcoming.length > 0) return upcoming;
+      return [
         {
           id: 'placeholder',
           title: 'Genting Highlands Convoy 2026',
@@ -2190,27 +2231,33 @@ function AppContent({
         } as any
       ];
     }
-    
+
+    const result: EventItem[] = [];
+    let upcomingIdx = 0;
+
     if (upcoming.length === 0) {
       return ongoing;
     }
-    
-    // Mixed logic: 2 ongoing, 1 upcoming in every 3 rotations
-    const mixed: any[] = [];
-    const slots = Math.max(Math.ceil(ongoing.length / 2) * 3, upcoming.length * 3);
-    let oIdx = 0;
-    let uIdx = 0;
-    
-    for (let i = 0; i < slots; i++) {
-      if (i % 3 === 2) {
-        mixed.push(upcoming[uIdx % upcoming.length]);
-        uIdx++;
-      } else {
-        mixed.push(ongoing[oIdx % ongoing.length]);
-        oIdx++;
+
+    if (ongoing.length >= 2) {
+      let ongoingIdx = 0;
+      while (upcomingIdx < upcoming.length) {
+        result.push(ongoing[ongoingIdx % ongoing.length]);
+        ongoingIdx++;
+        result.push(ongoing[ongoingIdx % ongoing.length]);
+        ongoingIdx++;
+        result.push(upcoming[upcomingIdx]);
+        upcomingIdx++;
+      }
+    } else {
+      const singleOngoing = ongoing[0];
+      while (upcomingIdx < upcoming.length) {
+        result.push(singleOngoing);
+        result.push(upcoming[upcomingIdx]);
+        upcomingIdx++;
       }
     }
-    return mixed;
+    return result;
   }, [events]);
 
   // Keep index within bounds
@@ -2219,16 +2266,6 @@ function AppContent({
       setCurrentEventIndex(0);
     }
   }, [sliderEvents, currentEventIndex]);
-
-  // Auto-slide every 5 seconds
-  useEffect(() => {
-    const count = sliderEvents.length;
-    if (count <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentEventIndex((prev) => (prev + 1) % count);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [sliderEvents]);
 
   // Merge static and dynamic announcements filtered by audience targeting rules
   useEffect(() => {
@@ -2853,9 +2890,12 @@ function AppContent({
       joinedCount: 48,
       image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
       meetingPoint: 'Petronas Solaris Serdang, 07:00 AM',
+      destination: 'Port Dickson',
       routeOverview: 'Kuala Lumpur → Melaka → Port Dickson (Coastal Drive)',
       avatars: ['AZ', 'SM', '+45'],
       userRegistered: false,
+      userWaitlisted: false,
+      waitlist: [] as string[]
     },
     {
       id: 2,
@@ -2866,9 +2906,12 @@ function AppContent({
       joinedCount: 12,
       image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
       meetingPoint: 'R&R Rawang (Northbound), 06:30 AM',
+      destination: 'Tanah Rata, Cameron Highlands',
       routeOverview: 'Kuala Lumpur → Tapah → Tanah Rata → Brinchang',
       avatars: ['JD', '+10'],
       userRegistered: false,
+      userWaitlisted: false,
+      waitlist: [] as string[]
     },
     {
       id: 3,
@@ -2880,8 +2923,13 @@ function AppContent({
       date: '14 Oct 2023',
       time: '05:00 AM',
       locationDetails: 'BHPetrol Karak Highway',
+      meetingPoint: 'BHPetrol Karak Highway, 05:00 AM',
+      destination: 'Genting Highlands',
+      routeOverview: 'Gombak Toll Plaza → BHPetrol Karak → Genting Highlands Peak',
       avatars: [],
       userRegistered: false,
+      userWaitlisted: false,
+      waitlist: [] as string[]
     }
   ]);
 
@@ -2927,7 +2975,7 @@ function AppContent({
   };
 
   // Toggle active RSVPs
-  const toggleRsvp = (eventId: number) => {
+  const toggleRsvp = (eventId: string | number) => {
     setEvents(events.map(ev => {
       if (ev.id === eventId) {
         const nextReg = !ev.registered;
@@ -2950,10 +2998,48 @@ function AppContent({
   const canDeleteEvent = (ev: EventItem) => {
     const currentUserId = auth.currentUser?.uid || userProfile?.uid || '';
     const isUserSuperAdmin = displayRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
-    return isUserSuperAdmin || (ev.creatorId !== undefined && ev.creatorId === currentUserId);
+    const isCreator = ev.creatorId !== undefined && ev.creatorId === currentUserId;
+    return isUserSuperAdmin || (isAdminOrSuperAdmin() && isCreator);
   };
 
-  // Delete event handler
+  const canEditEvent = (ev: EventItem) => {
+    const currentUserId = auth.currentUser?.uid || userProfile?.uid || '';
+    const isUserSuperAdmin = displayRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
+    const isCreator = ev.creatorId !== undefined && ev.creatorId === currentUserId;
+    return isUserSuperAdmin || (isAdminOrSuperAdmin() && isCreator);
+  };
+
+  const startEditEvent = (ev: EventItem) => {
+    setEditingEventId(ev.id);
+    setNewEventTitle(ev.title);
+    setNewEventLocation(ev.location);
+    setNewEventDate(ev.date);
+    setNewEventOrganizer(ev.organizer || '');
+    setNewEventImage(ev.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80');
+    setNewEventCategory(ev.category || 'upcoming');
+    setNewEventBadge(ev.badge || 'OPEN');
+    setNewEventLatitude(ev.latitude ? String(ev.latitude) : '');
+    setNewEventLongitude(ev.longitude ? String(ev.longitude) : '');
+    setNewEventGmapsLink(ev.gmapsLink || '');
+    setIsCreateEventModalOpen(true);
+  };
+
+  const closeCreateEventModal = () => {
+    setIsCreateEventModalOpen(false);
+    setEditingEventId(null);
+    setNewEventTitle('');
+    setNewEventLocation('');
+    setNewEventDate('');
+    setNewEventOrganizer('');
+    setNewEventImage('https://images.unsplash.com/photo-1617788138017-80ad40651399?w=600&auto=format&fit=crop&q=80');
+    setNewEventCategory('upcoming');
+    setNewEventBadge('OPEN');
+    setNewEventLatitude('');
+    setNewEventLongitude('');
+    setNewEventGmapsLink('');
+  };
+
+  // Delete event handler with real Firestore deletion
   const deleteEvent = async (eventId: string | number) => {
     const eventToDel = events.find(e => e.id === eventId);
     if (!eventToDel) return;
@@ -2965,32 +3051,59 @@ function AppContent({
 
     try {
       console.log(`[DELETE REQUEST] Deleting event ID: ${eventId}`);
-      if (typeof eventId === 'string') {
-        // If the ID is a string, delete the document from Firestore events collection
-        await deleteDoc(doc(db, 'events', eventId));
-        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}" dari database`, 'success');
-      } else {
-        // Mock event local state refresh fallback
-        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}"`, 'success');
-      }
+      const idStr = String(eventId);
+      await deleteDoc(doc(db, 'events', idStr));
+      triggerToast(`Berjaya memadamkan acara "${eventToDel.title}" dari database`, 'success');
 
-      // Add to deleted IDs in localStorage to persist across refreshes
-      try {
-        const saved = localStorage.getItem('mvoc_deleted_event_ids');
-        const deletedIds = saved ? JSON.parse(saved) : [];
-        if (!deletedIds.includes(eventId)) {
-          deletedIds.push(eventId);
-          localStorage.setItem('mvoc_deleted_event_ids', JSON.stringify(deletedIds));
-        }
-      } catch (e) {
-        console.warn("Failed to save deleted event ID to localStorage:", e);
-      }
-
-      // State Refresh: filter out the deleted event to immediately reflect on UI
-      setEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
+      // State Refresh: filter out the deleted event to immediately reflect on UI (re-render)
+      setEvents(prevEvents => prevEvents.filter(e => String(e.id) !== idStr));
     } catch (err: any) {
       console.error("Error deleting event:", err);
       triggerToast(`Gagal memadamkan acara: ${err.message || err}`, 'error');
+    }
+  };
+
+  const handleWaitlist = async (convoyId: number) => {
+    const convoyItem = convoysList.find(c => c.id === convoyId);
+    if (!convoyItem) return;
+
+    try {
+      const currentUserId = auth.currentUser?.uid || userProfile?.uid || '';
+      if (!currentUserId) {
+        triggerToast('Sila log masuk untuk menyertai senarai menunggu.', 'error');
+        return;
+      }
+
+      // Add to Firestore waitlist array under convoys/{convoyId}
+      const convoyRef = doc(db, 'convoys', String(convoyId));
+      await updateDoc(convoyRef, {
+        waitlist: arrayUnion(currentUserId)
+      }).catch(async (err) => {
+        console.warn("Convoy doc not found in Firestore, seeding/creating...", err);
+        await setDoc(convoyRef, {
+          title: convoyItem.title,
+          waitlist: [currentUserId]
+        }, { merge: true });
+      });
+
+      // Update local state
+      setConvoysList(prevList =>
+        prevList.map(c => {
+          if (c.id === convoyId) {
+            return {
+              ...c,
+              userWaitlisted: true,
+              waitlist: [...(c.waitlist || []), currentUserId]
+            };
+          }
+          return c;
+        })
+      );
+
+      triggerToast(`Berjaya menyertai Waitlist untuk "${convoyItem.title}"!`, 'success');
+    } catch (err: any) {
+      console.error("Error joining waitlist:", err);
+      triggerToast(`Gagal menyertai waitlist: ${err.message || err}`, 'error');
     }
   };
 
@@ -3697,76 +3810,73 @@ function AppContent({
                     )}
                   </div>
 
-                  {/* Next Major Event Banner Carousel */}
-                  {sliderEvents[currentEventIndex] && (
+                  {/* Next Major Event Banner Carousel (using Embla Carousel) */}
+                  {sliderEvents.length > 0 && (
                     <div className="space-y-3 w-full">
-                      <div className="relative rounded-2xl overflow-hidden aspect-[1.95/1] shadow-md border border-slate-200/50 w-full bg-[#0d1f35]">
-                        <AnimatePresence mode="wait">
-                          <motion.div
-                            key={`${sliderEvents[currentEventIndex].id}-${currentEventIndex}`}
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            transition={{ duration: 0.35, ease: 'easeInOut' }}
-                            className="absolute inset-0 flex flex-col justify-between p-4 text-white select-none"
-                          >
-                            {/* Toyota Cockpit Background */}
-                            <img 
-                              src={sliderEvents[currentEventIndex].image} 
-                              alt={sliderEvents[currentEventIndex].title}
-                              loading="lazy"
-                              className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
-                            />
-                            
-                            {/* Dark gradient overlap */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-transparent pointer-events-none" />
+                      <div className="overflow-hidden w-full rounded-2xl border border-slate-200/50 shadow-md bg-[#0d1f35]" ref={emblaRef}>
+                        <div className="flex">
+                          {sliderEvents.map((event, idx) => (
+                            <div 
+                              key={`${event.id}-${idx}`} 
+                              className="flex-[0_0_100%] min-w-0 relative aspect-[1.95/1] flex flex-col justify-between p-4 text-white select-none"
+                            >
+                              {/* Toyota Cockpit Background */}
+                              <img 
+                                src={event.image} 
+                                alt={event.title}
+                                loading="lazy"
+                                className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
+                              />
+                              
+                              {/* Dark gradient overlap */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-transparent pointer-events-none" />
 
-                            {/* Smart Alerting Badge */}
-                            <div className="relative z-10 self-start">
-                              {sliderEvents[currentEventIndex].category === 'ongoing' ? (
-                                <span className="text-[9px] bg-rose-600 text-white font-black px-2.5 py-1 rounded tracking-wider uppercase flex items-center gap-1.5 shadow-[0_0_10px_rgba(225,29,72,0.4)] border border-rose-500/20">
-                                  <span className="relative flex h-1.5 w-1.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                              {/* Smart Alerting Badge */}
+                              <div className="relative z-10 self-start">
+                                {event.category === 'ongoing' ? (
+                                  <span className="text-[9px] bg-rose-600 text-white font-black px-2.5 py-1 rounded tracking-wider uppercase flex items-center gap-1.5 shadow-[0_0_10px_rgba(225,29,72,0.4)] border border-rose-500/20">
+                                    <span className="relative flex h-1.5 w-1.5">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                                    </span>
+                                    LIVE NOW
                                   </span>
-                                  LIVE NOW
-                                </span>
-                              ) : (
-                                <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
-                                  NEXT MAJOR EVENT
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Header, Date, & Register Button */}
-                            <div className="relative z-10 space-y-2">
-                              <div>
-                                <h4 className="text-sm font-extrabold tracking-tight leading-snug">
-                                  {sliderEvents[currentEventIndex].title}
-                                </h4>
-                                <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
-                                  {sliderEvents[currentEventIndex].date}
-                                </p>
+                                ) : (
+                                  <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
+                                    NEXT MAJOR EVENT
+                                  </span>
+                                )}
                               </div>
-                              <button 
-                                onClick={() => {
-                                  const currentEvent = sliderEvents[currentEventIndex];
-                                  setCurrentTab('events');
-                                  if (currentEvent.id !== 'placeholder') {
-                                    setSelectedEventId(currentEvent.id);
-                                    triggerToast(`Mendaftar untuk ${currentEvent.title}!`, 'success');
-                                  } else {
-                                    setSelectedEventId(null);
-                                    triggerToast('Mendaftar untuk Genting Highlands Convoy!', 'success');
-                                  }
-                                }}
-                                className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
-                              >
-                                Register Now
-                              </button>
+
+                              {/* Header, Date, & Register Button */}
+                              <div className="relative z-10 space-y-2">
+                                <div>
+                                  <h4 className="text-sm font-extrabold tracking-tight leading-snug">
+                                    {event.title}
+                                  </h4>
+                                  <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
+                                    {event.date}
+                                  </p>
+                                </div>
+                                <button 
+                                  onClick={() => {
+                                    setCurrentTab('events');
+                                    if (event.id !== 'placeholder') {
+                                      setSelectedEventId(event.id);
+                                      triggerToast(`Mendaftar untuk ${event.title}!`, 'success');
+                                    } else {
+                                      setSelectedEventId(null);
+                                      triggerToast('Mendaftar untuk Genting Highlands Convoy!', 'success');
+                                    }
+                                  }}
+                                  className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
+                                >
+                                  Register Now
+                                </button>
+                              </div>
                             </div>
-                          </motion.div>
-                        </AnimatePresence>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Pagination Indicators (dot kecil) */}
@@ -3776,7 +3886,7 @@ function AppContent({
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setCurrentEventIndex(idx)}
+                              onClick={() => emblaApi && emblaApi.scrollTo(idx)}
                               className={`h-1.5 rounded-full transition-all duration-300 ${
                                 currentEventIndex === idx ? 'w-4 bg-emerald-500' : 'w-1.5 bg-slate-450 opacity-40 hover:opacity-80'
                               }`}
@@ -6182,7 +6292,10 @@ function AppContent({
                           {isAdminOrSuperAdmin() && (
                             <button
                               id="btn-create-event"
-                              onClick={() => setIsCreateEventModalOpen(true)}
+                              onClick={() => {
+                                closeCreateEventModal();
+                                setIsCreateEventModalOpen(true);
+                              }}
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-emerald-500/20 shadow-xs"
                             >
                               <Plus className="w-3 h-3 text-white" />
@@ -6269,6 +6382,19 @@ function AppContent({
                                     >
                                       <Share2 className="w-4 h-4 shrink-0" />
                                     </button>
+                                    {canEditEvent(ev) && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          startEditEvent(ev);
+                                        }}
+                                        className="p-2.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition cursor-pointer border border-amber-150"
+                                        id={`edit-btn-${ev.id}`}
+                                        title="Edit Event"
+                                      >
+                                        <Pencil className="w-4 h-4 shrink-0" />
+                                      </button>
+                                    )}
                                     {canDeleteEvent(ev) && (
                                       <button 
                                         onClick={(e) => {
@@ -6855,7 +6981,7 @@ function AppContent({
                                   {/* For Card 3 with no image header, show the Last Slot badge and registration inline */}
                                   {!item.image && (
                                     <div className="flex items-center gap-2 mb-2 select-none">
-                                      <span className="text-[9.5px] font-black tracking-wider uppercase bg-red-50 text-red-600 border border-red-100 px-2.5 py-0.5 rounded-md">
+                                      <span className="text-[9.5px] font-black tracking-wider uppercase bg-red-50 text-red-650 border border-red-100 px-2.5 py-0.5 rounded-md">
                                         {item.status}
                                       </span>
                                     </div>
@@ -6864,10 +6990,25 @@ function AppContent({
                                     {item.title}
                                   </h3>
                                 </div>
+                              </div>
 
-                                <div className="flex items-center gap-1.5 shrink-0 py-1.5 px-3 bg-[#EBF2FC] border border-blue-105/20 rounded-lg text-[#0F2D52] font-extrabold text-[11px] select-none shadow-xs">
-                                  <Users className="w-3.5 h-3.5 text-[#0F2D52]" />
-                                  <span>{item.joinedCount}/{item.maxSlots}</span>
+                              {/* Progress Bar (Hijau <70%, Kuning 70-90%, Merah >90% atau penuh) */}
+                              <div className="space-y-1.5 pt-1">
+                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-[#0F2D52]" /> Capacity</span>
+                                  <span className="text-[#0F2D52]">{item.joinedCount} / {item.maxSlots} ({Math.round((item.joinedCount / item.maxSlots) * 100)}%)</span>
+                                </div>
+                                <div className="w-full bg-slate-105 h-2 rounded-full overflow-hidden border border-slate-200/50">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      (item.joinedCount / item.maxSlots) > 0.9
+                                        ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+                                        : (item.joinedCount / item.maxSlots) >= 0.7
+                                          ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                                          : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                                    }`}
+                                    style={{ width: `${Math.min(100, (item.joinedCount / item.maxSlots) * 100)}%` }}
+                                  />
                                 </div>
                               </div>
 
@@ -6891,18 +7032,33 @@ function AppContent({
 
                                   {/* Route overview list item container */}
                                   {item.routeOverview && (
-                                    <div className="flex items-start gap-3.5">
-                                      <div className="w-9 h-9 bg-blue-50/70 border border-blue-105/20 text-[#0F2D52] flex items-center justify-center rounded-xl shrink-0">
-                                        <Compass className="w-4.5 h-4.5 text-[#0F2D52]" />
+                                    <div className="flex items-start justify-between gap-3.5 w-full">
+                                      <div className="flex items-start gap-3.5">
+                                        <div className="w-9 h-9 bg-blue-50/70 border border-blue-105/20 text-[#0F2D52] flex items-center justify-center rounded-xl shrink-0">
+                                          <Compass className="w-4.5 h-4.5 text-[#0F2D52]" />
+                                        </div>
+                                        <div className="text-left py-0.5">
+                                          <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block">
+                                            Route Overview
+                                          </span>
+                                          <span className="text-xs font-semibold text-slate-600 leading-normal block mt-0.5">
+                                            {item.routeOverview}
+                                          </span>
+                                        </div>
                                       </div>
-                                      <div className="text-left py-0.5">
-                                        <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block">
-                                          Route Overview
-                                        </span>
-                                        <span className="text-xs font-semibold text-slate-600 leading-normal block mt-0.5">
-                                          {item.routeOverview}
-                                        </span>
-                                      </div>
+                                      {item.meetingPoint && item.destination && (
+                                        <button
+                                          onClick={() => {
+                                            const origin = item.meetingPoint.split(',')[0].trim();
+                                            const dest = item.destination;
+                                            const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`;
+                                            window.open(url, '_blank');
+                                          }}
+                                          className="text-[10px] font-black text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition shrink-0 self-center cursor-pointer font-sans"
+                                        >
+                                          View Route 🗺️
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -6936,12 +7092,20 @@ function AppContent({
 
                                   {/* Wide Interactive Blue Destination Banner Pill with Steer Arrow */}
                                   <div 
-                                    className="bg-[#EBF2FC] hover:bg-[#DCEBFB] border border-blue-150/30 rounded-2xl p-3.5 px-4.5 flex items-center justify-between transition-colors shadow-xs select-none"
+                                    onClick={() => {
+                                      if (item.meetingPoint && item.destination) {
+                                        const origin = item.meetingPoint.split(',')[0].trim();
+                                        const dest = item.destination;
+                                        const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`;
+                                        window.open(url, '_blank');
+                                      }
+                                    }}
+                                    className="bg-[#EBF2FC] hover:bg-[#DCEBFB] border border-blue-150/30 rounded-2xl p-3.5 px-4.5 flex items-center justify-between transition-colors shadow-xs select-none cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       <Compass className="w-4.5 h-4.5 text-[#0F2D52]" />
                                       <span className="text-xs font-black text-[#0F2D52]">
-                                        {item.locationDetails}
+                                        {item.locationDetails} (View Route 🗺️)
                                       </span>
                                     </div>
                                     <ChevronRight className="w-4 h-4 text-[#0F2D52] shrink-0" />
@@ -6977,19 +7141,20 @@ function AppContent({
                                   )}
                                 </div>
 
-                                  <div className="flex items-center gap-2">
-                                    {isAdminOrSuperAdmin() && (
-                                      <button 
-                                        onClick={() => {
-                                          setGeneratedQrPayload(JSON.stringify({ type: 'attendance', context: 'convoy', refId: String(item.id), name: item.title }));
-                                          setIsQrGeneratorModalOpen(true);
-                                        }}
-                                        className="w-11 h-11 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl flex items-center justify-center transition cursor-pointer border border-emerald-150 shrink-0 shadow-xs"
-                                        title="Generate Attendance QR"
-                                      >
-                                        <QrCode className="w-4.5 h-4.5 shrink-0" />
-                                      </button>
-                                    )}
+                                <div className="flex items-center gap-2">
+                                  {isAdminOrSuperAdmin() && (
+                                    <button 
+                                      onClick={() => {
+                                        setGeneratedQrPayload(JSON.stringify({ type: 'attendance', context: 'convoy', refId: String(item.id), name: item.title }));
+                                        setIsQrGeneratorModalOpen(true);
+                                      }}
+                                      className="w-11 h-11 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl flex items-center justify-center transition cursor-pointer border border-emerald-150 shrink-0 shadow-xs"
+                                      title="Generate Attendance QR"
+                                    >
+                                      <QrCode className="w-4.5 h-4.5 shrink-0" />
+                                    </button>
+                                  )}
+                                  {item.userRegistered ? (
                                     <button
                                       onClick={() => {
                                         // Prepopulate states before opening form
@@ -7001,23 +7166,48 @@ function AppContent({
                                         setJoiningAgreedRules(item.userRegistered); // if already registered, keep checked
                                         setSelectedJoiningConvoyId(item.id);
                                       }}
-                                      className={`px-6 py-3 rounded-xl text-xs font-black tracking-wide min-h-[44px] flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer ${
-                                        item.userRegistered
-                                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-250 hover:bg-emerald-100/90'
-                                          : 'bg-[#0F2D52] hover:bg-[#1c4a7e] text-white active:scale-98'
-                                      }`}
+                                      className="px-6 py-3 rounded-xl text-xs font-black tracking-wide min-h-[44px] flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer bg-emerald-50 text-emerald-800 border border-emerald-250 hover:bg-emerald-100/90"
                                       id={`join-convoy-btn-${item.id}`}
                                     >
-                                      {item.userRegistered ? (
-                                        <>
-                                          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                                          <span>Joined ✔</span>
-                                        </>
-                                      ) : (
-                                        <span>Join Convoy</span>
-                                      )}
+                                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                                      <span>Joined ✔</span>
                                     </button>
-                                  </div>
+                                  ) : item.joinedCount >= item.maxSlots ? (
+                                    <button
+                                      disabled={item.userWaitlisted}
+                                      onClick={() => {
+                                        if (!item.userWaitlisted) {
+                                          handleWaitlist(item.id);
+                                        }
+                                      }}
+                                      className={`px-6 py-3 rounded-xl text-xs font-black tracking-wide min-h-[44px] flex items-center justify-center gap-1.5 transition-all shadow-xs ${
+                                        item.userWaitlisted
+                                          ? 'bg-slate-100 text-slate-400 border border-slate-205 cursor-not-allowed'
+                                          : 'bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-350 cursor-pointer active:scale-98'
+                                      }`}
+                                      id={`join-waitlist-btn-${item.id}`}
+                                    >
+                                      <span>{item.userWaitlisted ? 'Waitlisted' : 'Join Waitlist'}</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        // Prepopulate states before opening form
+                                        setJoiningVehicleNumber(convoyVehicleNumber);
+                                        setJoiningShirtSize(convoyShirtSize);
+                                        setJoiningPaxCount(convoyPaxCount);
+                                        setJoiningChapter(chapterSelector);
+                                        setJoiningDietary('None');
+                                        setJoiningAgreedRules(item.userRegistered); // if already registered, keep checked
+                                        setSelectedJoiningConvoyId(item.id);
+                                      }}
+                                      className="px-6 py-3 rounded-xl text-xs font-black tracking-wide min-h-[44px] flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer bg-[#0F2D52] hover:bg-[#1c4a7e] text-white active:scale-98"
+                                      id={`join-convoy-btn-${item.id}`}
+                                    >
+                                      <span>Join Convoy</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -9625,7 +9815,7 @@ function AppContent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsCreateEventModalOpen(false)}
+              onClick={closeCreateEventModal}
               className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
             />
             <motion.div
@@ -9637,10 +9827,12 @@ function AppContent({
               <div className="flex justify-between items-center pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2 text-emerald-400">
                   <Calendar className="w-5 h-5 text-emerald-400" />
-                  <h4 className="text-sm font-black uppercase tracking-wide">Create Club Event</h4>
+                  <h4 className="text-sm font-black uppercase tracking-wide">
+                    {editingEventId ? 'Edit Club Event' : 'Create Club Event'}
+                  </h4>
                 </div>
                 <button 
-                  onClick={() => setIsCreateEventModalOpen(false)}
+                  onClick={closeCreateEventModal}
                   className="p-1 text-slate-400 hover:text-white cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -9681,13 +9873,13 @@ function AppContent({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-3 gap-2.5">
                   <div className="space-y-1">
                     <label className="text-[10px] text-slate-405 font-bold uppercase block">Category</label>
                     <select
                       value={newEventCategory}
                       onChange={(e) => setNewEventCategory(e.target.value as any)}
-                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-sans"
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-2.5 font-bold text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-sans text-xs"
                     >
                       <option value="upcoming">Upcoming</option>
                       <option value="ongoing">Ongoing</option>
@@ -9701,9 +9893,22 @@ function AppContent({
                       type="text"
                       value={newEventOrganizer}
                       onChange={(e) => setNewEventOrganizer(e.target.value)}
-                      placeholder="e.g., HQ / Johor Chapter"
-                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans"
+                      placeholder="e.g., HQ"
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-2.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans text-xs"
                     />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-405 font-bold uppercase block">Badge</label>
+                    <select
+                      value={newEventBadge}
+                      onChange={(e) => setNewEventBadge(e.target.value)}
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-2.5 font-bold text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-sans text-xs"
+                    >
+                      <option value="OPEN">OPEN</option>
+                      <option value="LIMITED SLOTS">LIMITED SLOTS</option>
+                      <option value="FULL">FULL</option>
+                    </select>
                   </div>
                 </div>
 
@@ -9794,7 +9999,7 @@ function AppContent({
 
               <div className="flex gap-2.5 pt-3">
                 <button
-                  onClick={() => setIsCreateEventModalOpen(false)}
+                  onClick={closeCreateEventModal}
                   className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
                 >
                   Cancel
@@ -9806,43 +10011,44 @@ function AppContent({
                       return;
                     }
                     try {
-                      const eventData = {
+                      const eventData: any = {
                         title: newEventTitle,
                         date: newEventDate,
                         location: newEventLocation || 'Kuala Lumpur, Malaysia',
-                        rsvps: 0,
-                        limit: 150,
-                        featured: true,
-                        registered: false,
                         organizer: newEventOrganizer || 'HQ',
                         badge: newEventBadge || 'OPEN',
                         image: newEventImage || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
                         category: newEventCategory || 'upcoming',
-                        warningText: '',
-                        creatorId: auth.currentUser?.uid || '',
                         latitude: newEventLatitude ? Number(newEventLatitude) : 3.1390,
                         longitude: newEventLongitude ? Number(newEventLongitude) : 101.6869,
                         gmapsLink: newEventGmapsLink || '',
                       };
-                      await addDoc(collection(db, 'events'), eventData);
-                      triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
+
+                      if (editingEventId) {
+                        // Updating existing event
+                        await updateDoc(doc(db, 'events', String(editingEventId)), eventData);
+                        triggerToast(`Successfully updated event "${newEventTitle}"!`, 'success');
+                      } else {
+                        // Creating new event
+                        eventData.rsvps = 0;
+                        eventData.limit = 150;
+                        eventData.featured = true;
+                        eventData.registered = false;
+                        eventData.warningText = '';
+                        eventData.creatorId = auth.currentUser?.uid || '';
+                        await addDoc(collection(db, 'events'), eventData);
+                        triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
+                      }
                     } catch (err: any) {
-                      console.error("Error creating event:", err);
-                      triggerToast(`Failed to create event: ${err.message || err}`, 'error');
+                      console.error("Error saving event:", err);
+                      triggerToast(`Failed to save event: ${err.message || err}`, 'error');
                     } finally {
-                      setIsCreateEventModalOpen(false);
-                      setNewEventTitle('');
-                      setNewEventLocation('');
-                      setNewEventDate('');
-                      setNewEventOrganizer('');
-                      setNewEventLatitude('');
-                      setNewEventLongitude('');
-                      setNewEventGmapsLink('');
+                      closeCreateEventModal();
                     }
                   }}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
                 >
-                  Create
+                  {editingEventId ? 'Save' : 'Create'}
                 </button>
               </div>
             </motion.div>
