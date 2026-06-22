@@ -18,13 +18,20 @@ interface BroadcastModuleProps {
   onBack: () => void;
   triggerToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   displayEmail?: string;
-  managedChapter?: string;
+  managedChapter?: string | string[];
 }
 
 type AudienceType = 'All Users' | 'Gold Members' | 'Admins' | 'Chapter Members';
 
 export default function BroadcastModule({ onBack, triggerToast, displayEmail, managedChapter }: BroadcastModuleProps) {
+  const managedChaptersList = Array.isArray(managedChapter)
+    ? managedChapter
+    : (managedChapter ? [managedChapter] : []);
+
   const [audience, setAudience] = useState<AudienceType>('All Users');
+  const [selectedTargetChapter, setSelectedTargetChapter] = useState<string>(
+    managedChaptersList[0] || 'None'
+  );
   const [subject, setSubject] = useState<string>('');
   const [body, setBody] = useState<string>('');
   
@@ -108,7 +115,9 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
         sender: displayEmail || 'Super Admin Council',
         timestamp: serverTimestamp(),
         audience: audience,
-        targetChapter: audience === 'Chapter Members' ? (managedChapter || 'None') : null
+        targetChapter: audience === 'Chapter Members' 
+          ? (selectedTargetChapter === 'All My Chapters' ? managedChaptersList : selectedTargetChapter)
+          : null
       });
 
       triggerToast('Message successfully published to Announcements', 'success');
@@ -243,9 +252,28 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
             }`}>
               <Info className="w-5 h-5" />
             </div>
-            <div>
+            <div className="flex flex-col min-w-0">
               <span className="text-xs font-black block text-slate-800">Chapter Specific</span>
-              <span className="text-[10px] text-slate-500 font-bold block mt-0.5 line-clamp-1">{managedChapter || 'All Chapters'}</span>
+              {managedChaptersList.length <= 1 ? (
+                <span className="text-[10px] text-slate-500 font-bold block mt-0.5 line-clamp-1">
+                  {selectedTargetChapter || 'All Chapters'}
+                </span>
+              ) : (
+                <select
+                  value={selectedTargetChapter}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    setSelectedTargetChapter(e.target.value);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-[#EFF4FB] border border-[#cbd5e1]/40 rounded-lg py-1 px-2 text-[10px] font-bold text-slate-700 mt-1 focus:outline-hidden"
+                >
+                  {managedChaptersList.map(ch => (
+                    <option key={ch} value={ch}>{ch}</option>
+                  ))}
+                  <option value="All My Chapters">All My Chapters</option>
+                </select>
+              )}
             </div>
           </button>
         </div>

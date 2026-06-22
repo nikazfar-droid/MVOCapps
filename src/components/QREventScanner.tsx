@@ -3,6 +3,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { X, CheckCircle, AlertTriangle, MapPin, Compass, ShieldAlert, Award, RefreshCw, Smartphone } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { calculateEffectiveXP, SyncedUserProfile } from '../lib/fetchAndSyncData';
 
 interface EventItem {
   id: string | number;
@@ -13,6 +14,7 @@ interface EventItem {
   category?: string;
   date?: string;
   gmapsLink?: string;
+  isMajor?: boolean;
 }
 
 interface QREventScannerProps {
@@ -273,10 +275,9 @@ export default function QREventScanner({ events = [], onClose, triggerToast }: Q
           return;
         }
 
-        // 4. Save to Firestore & Award Points (+30 XP)
+        // 4. Save Attendance Record
         const eventIdStr = String(currentEvent.id);
         
-        // Ensure root attendance doc exists
         await setDoc(doc(db, 'attendance', eventIdStr), {
           title: currentEvent.title,
           context: 'event',
@@ -284,7 +285,6 @@ export default function QREventScanner({ events = [], onClose, triggerToast }: Q
           updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        // Save attendee record
         await setDoc(attendeeRef, {
           uid: parsed.uid,
           name: parsed.name,
@@ -298,15 +298,71 @@ export default function QREventScanner({ events = [], onClose, triggerToast }: Q
           bypassedGeofence: bypassGeofence
         });
 
-        // Award +30 points to member's user profile
+        // 5. Calculate Effective XP, Monthly Caps, and Award Points
         const userProfileRef = doc(db, 'users', parsed.uid);
-        await updateDoc(userProfileRef, {
-          points: increment(30)
-        });
+        const userProfileSnap = await getDoc(userProfileRef);
+        
+        let actualXpAwarded = 0;
+        let isMajorEvent = false;
+        let rewardType = 'Biasa';
+        
+        if (userProfileSnap.exists()) {
+          const userData = userProfileSnap.data() as Partial<SyncedUserProfile>;
+          
+          // Process Point Decay
+          const effectiveData = calculateEffectiveXP(userData);
+          let currentXP = effectiveData.effectiveXP;
+          
+          // Determine XP weight
+          const titleLower = currentEvent.title.toLowerCase();
+          const isVolunteer = titleLower.includes('sukarelawan') || titleLower.includes('volunteer');
+          isMajorEvent = currentEvent.isMajor || titleLower.includes('major') || titleLower.includes('ajk');
+          
+          let xpToAward = 10; // Hadir Event biasa
+          rewardType = 'Biasa';
+          
+          if (isVolunteer) {
+            xpToAward = 100;
+            rewardType = 'Sukarelawan';
+          } else if (isMajorEvent) {
+            xpToAward = 50;
+            rewardType = 'Major';
+          }
+          const now = new Date();
+          const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          
+          const monthlyXpMap = userData.monthlyXp || {};
+          const currentMonthXp = monthlyXpMap[currentMonth] || 0;
+          
+          if (currentMonthXp < 500) {
+            actualXpAwarded = Math.min(xpToAward, 500 - currentMonthXp);
+          }
+          
+          currentXP += actualXpAwarded;
+          monthlyXpMap[currentMonth] = currentMonthXp + actualXpAwarded;
+          
+          // Prepare updates
+          const updates: any = {
+            points: currentXP,
+            lastActivityDate: now.toISOString(),
+            monthlyXp: monthlyXpMap
+          };
+          
+          if (isMajorEvent) {
+            updates.majorEventCount = increment(1);
+          }
+          
+          await updateDoc(userProfileRef, updates);
+        }
 
         setSuccessMemberName(parsed.name);
         setScanStatus('success');
-        triggerToast(`Kehadiran ${parsed.name} berjaya direkodkan! (+30 XP)`, 'success');
+        
+        if (actualXpAwarded > 0) {
+          triggerToast(`Kehadiran ${parsed.name} direkodkan! (+${actualXpAwarded} XP ${rewardType})`, 'success');
+        } else {
+          triggerToast(`Kehadiran direkodkan! (0 XP - Had 500 XP bulanan dicapai)`, 'info');
+        }
         await logScanAttempt(
           'success',
           `Pendaftaran hadir berjaya: ${parsed.name} (${parsed.mvocId}) untuk ${currentEvent.title}`,
@@ -608,7 +664,7 @@ export default function QREventScanner({ events = [], onClose, triggerToast }: Q
                       <h4 className="text-xs font-black text-emerald-450 uppercase tracking-widest">KEHADIRAN SAH</h4>
                       <p className="text-sm font-extrabold text-white mt-1 leading-snug">{successMemberName}</p>
                       <p className="text-[10px] text-emerald-400 font-bold mt-2 bg-emerald-500/10 py-1 px-2.5 rounded-full inline-flex items-center gap-1.5 border border-emerald-500/20">
-                        <Award className="w-3.5 h-3.5" /> Ganjaran +30 XP Diberikan
+                        <Award className="w-3.5 h-3.5" /> Ganjaran Direkodkan
                       </p>
                     </div>
                   </div>

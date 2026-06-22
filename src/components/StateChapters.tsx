@@ -70,9 +70,44 @@ interface StateChaptersProps {
   setSelectedChapterDetailId: (id: number | null) => void;
   setSelectedLeadForChat: (lead: any) => void;
   setChapterLeadChatMessage: (msg: string) => void;
+  setChapterLeadChatMessage: (msg: string) => void;
   userProfile: any;
   isSuperAdmin: boolean;
+  membersList?: any[];
 }
+
+const AvatarStack: React.FC<{ admins: string[]; totalMembers: number }> = ({ admins, totalMembers }) => {
+  const visibleAdmins = admins.slice(0, 2);
+  const remainingCount = totalMembers - visibleAdmins.length;
+  
+  const bgColors = [
+    'bg-emerald-200 text-emerald-800', 
+    'bg-blue-200 text-blue-800'
+  ];
+
+  return (
+    <div className="flex items-center -space-x-4 shrink-0">
+      {visibleAdmins.map((admin, index) => (
+        <div 
+          key={index} 
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black border-2 border-slate-50 relative z-${20 - index * 10} ${bgColors[index % bgColors.length]} uppercase select-none`}
+          title={admin}
+        >
+          {admin.charAt(0)}
+        </div>
+      ))}
+      
+      {remainingCount > 0 && (
+        <div 
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black border-2 border-slate-50 bg-slate-200 text-slate-700 relative z-0 select-none"
+          title={`${remainingCount} ahli lain`}
+        >
+          +{remainingCount}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function StateChapters({
   chaptersList,
@@ -84,7 +119,8 @@ export default function StateChapters({
   setSelectedLeadForChat,
   setChapterLeadChatMessage,
   userProfile,
-  isSuperAdmin
+  isSuperAdmin,
+  membersList = []
 }: StateChaptersProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'browse' | 'manage'>('browse');
@@ -478,14 +514,16 @@ export default function StateChapters({
         
         // update user document
         if (editChapterLeader) {
+            const { arrayUnion } = await import('firebase/firestore');
             const userRef = doc(db, 'users', editChapterLeader);
-            await updateDoc(userRef, { managedChapter: selectedManagedChapterNode.name });
+            await updateDoc(userRef, { managedChapter: arrayUnion(selectedManagedChapterNode.name) });
         }
         
         // Optionally, clear the previous leader's managedChapter
         if (selectedManagedChapterNode.adminId) {
+            const { arrayRemove } = await import('firebase/firestore');
             const prevUserRef = doc(db, 'users', selectedManagedChapterNode.adminId);
-            await updateDoc(prevUserRef, { managedChapter: null }).catch(() => {});
+            await updateDoc(prevUserRef, { managedChapter: arrayRemove(selectedManagedChapterNode.name) }).catch(() => {});
         }
       }
 
@@ -543,10 +581,10 @@ export default function StateChapters({
 
   const getZoneForChapter = (chapterName: string): string => {
     const name = chapterName.toLowerCase();
-    if (name.includes('sabah') || name.includes('sarawak') || name.includes('brunei')) {
+    if (name.includes('sabah') || name.includes('sarawak') || name.includes('brunei') || name.includes('labuan')) {
       return 'Zone Borneo';
     }
-    if (name.includes('selangor') || name.includes('kuala lumpur') || name.includes('klang') || name.includes('wp') || name.includes('w.p.')) {
+    if (name.includes('selangor') || name.includes('kuala lumpur') || name.includes('klang') || name.includes('wp') || name.includes('w.p.') || name.includes('putrajaya')) {
       return 'Zone Klang Valley';
     }
     if (name.includes('kelantan') || name.includes('terengganu') || name.includes('pahang')) {
@@ -790,6 +828,12 @@ export default function StateChapters({
     } else if (stateLower.includes('brunei') || stateLower.includes('brunie')) {
       flagUrl = 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Brunei.svg';
       altText = 'Brunei';
+    } else if (stateLower.includes('putrajaya')) {
+      flagUrl = 'https://upload.wikimedia.org/wikipedia/commons/9/9f/Flag_of_Putrajaya.svg';
+      altText = 'Putrajaya';
+    } else if (stateLower.includes('labuan')) {
+      flagUrl = 'https://upload.wikimedia.org/wikipedia/commons/6/69/Flag_of_Labuan.svg';
+      altText = 'Labuan';
     } else {
       flagUrl = 'https://upload.wikimedia.org/wikipedia/commons/6/66/Flag_of_Malaysia.svg';
       altText = 'Malaysia';
@@ -1260,13 +1304,48 @@ export default function StateChapters({
 
                                         {/* Leader info section */}
                                         <div className="flex items-center gap-2.5 mt-2.5 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-                                          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-black flex items-center justify-center border border-emerald-200/50 select-none uppercase shrink-0">
-                                            {item.leadInitial || item.leadName.charAt(0)}
-                                          </div>
-                                          <div className="text-[11px] min-w-0 flex-1">
-                                            <p className="text-slate-850 font-extrabold leading-none truncate select-none">{item.leadName}</p>
-                                            <p className="text-slate-500 font-semibold text-[9.5px] mt-0.5 truncate select-none">{item.leadTitle || 'Chapter Leader'}</p>
-                                          </div>
+                                          {(() => {
+                                            // Determine admins for this chapter
+                                            const chapterAdmins = membersList.filter(user => 
+                                              user.managedChapter && 
+                                              Array.isArray(user.managedChapter) &&
+                                              user.managedChapter.some((state: string) => {
+                                                const cleanState = state.toLowerCase().replace('w.p.', '').trim();
+                                                return (item.name && item.name.toLowerCase().includes(cleanState)) || 
+                                                       (item.subText && item.subText.toLowerCase().includes(cleanState));
+                                              })
+                                            );
+                                            
+                                            // If we found admins dynamically, use them
+                                            if (chapterAdmins.length > 0) {
+                                              const adminNames = chapterAdmins.map(a => a.shortName || a.name || a.email);
+                                              return (
+                                                <>
+                                                  <AvatarStack admins={adminNames} totalMembers={adminNames.length} />
+                                                  <div className="text-[11px] min-w-0 flex-1">
+                                                    <p className="text-slate-850 font-extrabold leading-none truncate select-none">
+                                                      {adminNames.length === 1 ? adminNames[0] : `${adminNames.length} Leaders`}
+                                                    </p>
+                                                    <p className="text-slate-500 font-semibold text-[9.5px] mt-0.5 truncate select-none">Chapter Lead</p>
+                                                  </div>
+                                                </>
+                                              );
+                                            }
+
+                                            // Fallback to legacy single admin string
+                                            const finalLeadName = item.leadName || 'Belum Ditetapkan';
+                                            return (
+                                              <>
+                                                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-black flex items-center justify-center border border-emerald-200/50 select-none uppercase shrink-0">
+                                                  {item.leadInitial || finalLeadName.charAt(0)}
+                                                </div>
+                                                <div className="text-[11px] min-w-0 flex-1">
+                                                  <p className="text-slate-850 font-extrabold leading-none truncate select-none">{finalLeadName}</p>
+                                                  <p className="text-slate-500 font-semibold text-[9.5px] mt-0.5 truncate select-none">{item.leadTitle || 'Chapter Leader'}</p>
+                                                </div>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
 
                                         {/* Meetup Routine */}

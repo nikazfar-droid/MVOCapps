@@ -78,7 +78,7 @@ export default function DataSyncProvider({
   const [regName, setRegName] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regPlate, setRegPlate] = useState("");
-  const [regChapter, setRegChapter] = useState("Selangor Chapter");
+  const [regChapter, setRegChapter] = useState("Zone Klang Valley");
   const [formLoading, setFormLoading] = useState(false);
 
   // Use refs to avoid re-triggering the useEffect when hooks/functions reference changes
@@ -299,7 +299,7 @@ export default function DataSyncProvider({
     setRegName("");
     setRegPhone("");
     setRegPlate("");
-    setRegChapter("Selangor Chapter");
+    setRegChapter("Zone Klang Valley");
   };
 
   const handleRequestFormSubmit = async (e: React.FormEvent) => {
@@ -507,13 +507,11 @@ export default function DataSyncProvider({
                             onChange={(e) => setRegChapter(e.target.value)}
                             className="w-full bg-white text-xs border border-slate-205 rounded-lg px-3 py-2 outline-none focus:border-[#0F2D52] transition font-semibold"
                           >
-                            <option value="Selangor Chapter">Selangor Chapter</option>
-                            <option value="Kuala Lumpur Chapter">Kuala Lumpur Chapter</option>
-                            <option value="Johor Chapter">Johor Chapter</option>
-                            <option value="Penang Chapter">Penang Chapter</option>
-                            <option value="Perak Chapter">Perak Chapter</option>
-                            <option value="East Coast Chapter (Kelantan/Terengganu/Pahang)">East Coast Chapter</option>
-                            <option value="East Malaysia Chapter (Sabah/Sarawak)">East Malaysia Chapter</option>
+                            <option value="Zone Klang Valley">Zone Klang Valley</option>
+                            <option value="Zone Utara">Zone Utara</option>
+                            <option value="Zone Borneo">Zone Borneo</option>
+                            <option value="Zone Pantai Timur">Zone Pantai Timur</option>
+                            <option value="Zone Selatan">Zone Selatan</option>
                           </select>
                         </div>
 

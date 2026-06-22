@@ -4,7 +4,14 @@ import { initializeFirestore, memoryLocalCache, clearIndexedDbPersistence, CACHE
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// Dynamically set authDomain to match the current hostname to prevent cross-origin 
+// iframe blocking issues on mobile browsers (Safari ITP / Chrome restrictions)
+const dynamicConfig = { ...firebaseConfig };
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+  dynamicConfig.authDomain = window.location.hostname;
+}
+
+const app = getApps().length === 0 ? initializeApp(dynamicConfig) : getApp();
 
 const dbId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
 

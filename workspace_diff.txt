@@ -1,0 +1,1425 @@
+﻿diff --git a/firestore.rules b/firestore.rules
+index 209f095..0496320 100644
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -163,7 +163,14 @@ service cloud.firestore {
+     // Events meetup collection
+     match /events/{eventId} {
+       allow read: if isNotSuspended() && isSignedIn();
+-      allow write: if isNotSuspended() && isAdminOrSuperAdmin();
++      allow create: if isNotSuspended() && isAdminOrSuperAdmin() && (
++        request.resource.data.get('creatorId', '') == request.auth.uid
++      );
++      allow update: if isNotSuspended() && isAdminOrSuperAdmin();
++      allow delete: if isNotSuspended() && (
++        isSuperAdmin() || 
++        (resource.data.get('creatorId', '') == request.auth.uid)
++      );
+     }
+ 
+     // QR Codes meta-collection
+diff --git a/src/App.tsx b/src/App.tsx
+index 62b11b5..f18df1f 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -105,6 +105,19 @@ import { QRCodeSVG } from 'qrcode.react';
+ export const MASTER_ADMIN_ID = 'MVOC-0001';
+ export const MASTER_EMAIL = 'nikazfar@gmail.com';
+ 
++// Haversine formula to calculate distance in meters between two GPS coordinates
++function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
++  const R = 6371000; // Earth radius in meters
++  const dLat = (lat2 - lat1) * Math.PI / 180;
++  const dLon = (lon2 - lon1) * Math.PI / 180;
++  const a = 
++    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
++    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
++    Math.sin(dLon / 2) * Math.sin(dLon / 2);
++  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++  return R * c;
++}
++
+ // Define core types
+ type TabType = 'dashboard' | 'profile' | 'vehicle' | 'card' | 'events' | 'convoy' | 'gallery' | 'announcements' | 'chapters' | 'merchants' | 'admin' | 'users' | 'broadcast' | 'members' | 'directory';
+ 
+@@ -141,6 +154,9 @@ interface EventItem {
+   image?: string;
+   category?: 'upcoming' | 'ongoing' | 'completed';
+   warningText?: string;
++  creatorId?: string;
++  latitude?: number;
++  longitude?: number;
+ }
+ 
+ export default function App() {
+@@ -616,6 +632,16 @@ function AppContent({
+   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+   const [isScannerOpen, setIsScannerOpen] = useState(false);
+   const [scannedResultUser, setScannedResultUser] = useState<any | null>(null);
++  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
++  useEffect(() => {
++    if (!isQrModalOpen) return;
++    // Update timestamp every 10 seconds to keep it dynamic and secure
++    setQrTimestamp(Date.now());
++    const interval = setInterval(() => {
++      setQrTimestamp(Date.now());
++    }, 10000);
++    return () => clearInterval(interval);
++  }, [isQrModalOpen]);
+   const [isSavingContact, setIsSavingContact] = useState(false);
+ 
+   // Admin QR Code Attendance Generator state
+@@ -1282,6 +1308,8 @@ function AppContent({
+     }
+   }, []);
+ 
++
++
+   const handleCopyLink = () => {
+     const cardUrl = `https://mvoc.my/card/${displayMvocId}`;
+     if (navigator.clipboard && navigator.clipboard.writeText) {
+@@ -1485,8 +1513,10 @@ function AppContent({
+       registered: false,
+       organizer: 'HQ',
+       badge: 'OPEN',
+-      image: 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+-      category: 'upcoming'
++      image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600&auto=format&fit=crop&q=80',
++      category: 'upcoming',
++      latitude: 3.1493,
++      longitude: 101.6938
+     },
+     { 
+       id: 2, 
+@@ -1501,12 +1531,14 @@ function AppContent({
+       badge: 'LIMITED SLOTS',
+       warningText: 'Only 5 slots remaining',
+       image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&auto=format&fit=crop&q=80',
+-      category: 'upcoming'
++      category: 'upcoming',
++      latitude: 1.4622,
++      longitude: 103.7644
+     },
+     { 
+       id: 3, 
+-      title: 'Genting Highlands Convoy 2024', 
+-      date: '16 Nov 2024', 
++      title: 'Genting Highlands Convoy 2026', 
++      date: '16 Nov 2026', 
+       location: 'Awana SkyWay Base Station', 
+       rsvps: 124, 
+       limit: 150, 
+@@ -1515,7 +1547,9 @@ function AppContent({
+       organizer: 'Selangor Chapter',
+       badge: 'OFFICIAL CONVOY',
+       image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+-      category: 'upcoming'
++      category: 'upcoming',
++      latitude: 3.4079,
++      longitude: 101.7828
+     },
+     {
+       id: 4,
+@@ -1529,10 +1563,28 @@ function AppContent({
+       organizer: 'Selangor Chapter',
+       badge: 'ONGOING',
+       image: 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80',
+-      category: 'ongoing'
++      category: 'ongoing',
++      latitude: 3.0886,
++      longitude: 101.5772
+     },
+     {
+       id: 5,
++      title: 'East Coast Gathering & Charity',
++      date: '22 Jun 2026',
++      location: 'Kuantan, Pahang',
++      rsvps: 88,
++      limit: 100,
++      featured: false,
++      registered: false,
++      organizer: 'East Coast Chapter',
++      badge: 'LIVE CONVOY',
++      image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
++      category: 'ongoing',
++      latitude: 3.8077,
++      longitude: 103.3260
++    },
++    {
++      id: 6,
+       title: 'Port Dickson BBQ & Drive',
+       date: '12 May 2026',
+       location: 'Batu 4 Beach, Port Dickson',
+@@ -1543,11 +1595,101 @@ function AppContent({
+       organizer: 'Negeri Sembilan Chapter',
+       badge: 'COMPLETED',
+       image: 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=600&auto=format&fit=crop&q=80',
+-      category: 'completed'
++      category: 'completed',
++      latitude: 2.5036,
++      longitude: 101.8344
++    },
++    {
++      id: 7,
++      title: 'Cameron Highlands Escapade',
++      date: '14 Feb 2026',
++      location: 'Brinchang, Cameron Highlands',
++      rsvps: 95,
++      limit: 100,
++      featured: false,
++      registered: false,
++      organizer: 'Perak Chapter',
++      badge: 'COMPLETED',
++      image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80',
++      category: 'completed',
++      latitude: 4.4941,
++      longitude: 101.3878
++    },
++    {
++      id: 8,
++      title: 'Northern Route Discovery',
++      date: '10 Jan 2026',
++      location: 'Penang Bridge / Georgetown',
++      rsvps: 130,
++      limit: 150,
++      featured: false,
++      registered: false,
++      organizer: 'Penang Chapter',
++      badge: 'COMPLETED',
++      image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
++      category: 'completed',
++      latitude: 5.3528,
++      longitude: 100.3542
++    },
++    {
++      id: 9,
++      title: 'National Day Mega Convoy 2026',
++      date: '31 Aug 2026',
++      location: 'Putrajaya Square, Putrajaya',
++      rsvps: 250,
++      limit: 300,
++      featured: true,
++      registered: false,
++      organizer: 'HQ',
++      badge: 'MEGA CONVOY',
++      image: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=600&auto=format&fit=crop&q=80',
++      category: 'upcoming',
++      latitude: 2.9264,
++      longitude: 101.6964
++    },
++    {
++      id: 10,
++      title: 'East Coast Coastal Route Drive',
++      date: '10 Oct 2026',
++      location: 'Cherating Beach, Kuantan',
++      rsvps: 80,
++      limit: 100,
++      featured: true,
++      registered: false,
++      organizer: 'East Coast Chapter',
++      badge: 'SCENIC DRIVE',
++      image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
++      category: 'upcoming',
++      latitude: 4.1278,
++      longitude: 103.3934
++    },
++    {
++      id: 11,
++      title: 'Veloz Track Day & Tuning',
++      date: '05 Dec 2026',
++      location: 'Sepang International Circuit, Selangor',
++      rsvps: 60,
++      limit: 80,
++      featured: true,
++      registered: false,
++      organizer: 'Selangor Chapter',
++      badge: 'TRACK DAY',
++      image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&auto=format&fit=crop&q=80',
++      category: 'upcoming',
++      latitude: 2.7607,
++      longitude: 101.7377
+     }
+   ];
+ 
+-  const [events, setEvents] = useState<EventItem[]>(DEFAULT_SAMPLE_EVENTS);
++  const [events, setEvents] = useState<EventItem[]>(() => {
++    try {
++      const saved = localStorage.getItem('mvoc_deleted_event_ids');
++      const deletedIds = saved ? JSON.parse(saved) : [];
++      return DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
++    } catch {
++      return DEFAULT_SAMPLE_EVENTS;
++    }
++  });
+ 
+   // lifted Gallery Albums to top-level state for real-time interactivity & deletion
+   const [galleryAlbums, setGalleryAlbums] = useState([
+@@ -1789,6 +1931,8 @@ function AppContent({
+   const [newEventCategory, setNewEventCategory] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
+   const [newEventBadge, setNewEventBadge] = useState('OPEN');
+   const [newEventDesc, setNewEventDesc] = useState('');
++  const [newEventLatitude, setNewEventLatitude] = useState('');
++  const [newEventLongitude, setNewEventLongitude] = useState('');
+ 
+   // Gallery inputs / actions status
+   const [isUploadGalleryModalOpen, setIsUploadGalleryModalOpen] = useState(false);
+@@ -1945,34 +2089,56 @@ function AppContent({
+     try {
+       const eventsRef = collection(db, 'events');
+       const unsubscribe = onSnapshot(eventsRef, (snapshot) => {
++        let deletedIds: (string | number)[] = [];
++        try {
++          const saved = localStorage.getItem('mvoc_deleted_event_ids');
++          deletedIds = saved ? JSON.parse(saved) : [];
++        } catch (e) {
++          console.warn("Failed to load deleted event IDs:", e);
++        }
++
+         const list: EventItem[] = [];
+         snapshot.forEach((docSnap) => {
+           const docData = docSnap.data();
+-          list.push({
+-            id: docSnap.id as any,
+-            title: docData.title || '',
+-            date: docData.date || '',
+-            location: docData.location || '',
+-            rsvps: docData.rsvps || 0,
+-            limit: docData.limit || 150,
+-            featured: docData.featured !== false,
+-            registered: docData.registered || false,
+-            organizer: docData.organizer || 'HQ',
+-            badge: docData.badge || 'OPEN',
+-            image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+-            category: docData.category || 'upcoming',
+-            warningText: docData.warningText || ''
+-          });
++          const docId = docSnap.id;
++          if (!deletedIds.includes(docId)) {
++            list.push({
++              id: docId as any,
++              title: docData.title || '',
++              date: docData.date || '',
++              location: docData.location || '',
++              rsvps: docData.rsvps || 0,
++              limit: docData.limit || 150,
++              featured: docData.featured !== false,
++              registered: docData.registered || false,
++              organizer: docData.organizer || 'HQ',
++              badge: docData.badge || 'OPEN',
++              image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
++              category: docData.category || 'upcoming',
++              warningText: docData.warningText || '',
++              creatorId: docData.creatorId || '',
++              latitude: docData.latitude ? Number(docData.latitude) : undefined,
++              longitude: docData.longitude ? Number(docData.longitude) : undefined
++            });
++          }
+         });
+         setFirestoreEvents(list);
++        
++        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
+         if (list.length > 0) {
+           setEvents(list);
+         } else {
+-          setEvents(DEFAULT_SAMPLE_EVENTS);
++          setEvents(activeSampleEvents);
+         }
+       }, (error) => {
+         console.error("Error listening to events:", error);
+-        setEvents(DEFAULT_SAMPLE_EVENTS);
++        let deletedIds: (string | number)[] = [];
++        try {
++          const saved = localStorage.getItem('mvoc_deleted_event_ids');
++          deletedIds = saved ? JSON.parse(saved) : [];
++        } catch (e) {}
++        const activeSampleEvents = DEFAULT_SAMPLE_EVENTS.filter(e => !deletedIds.includes(e.id));
++        setEvents(activeSampleEvents);
+       });
+       return () => unsubscribe();
+     } catch (e) {
+@@ -2719,6 +2885,54 @@ function AppContent({
+     }));
+   };
+ 
++  const canDeleteEvent = (ev: EventItem) => {
++    const currentUserId = auth.currentUser?.uid || userProfile?.uid || '';
++    const isUserSuperAdmin = displayRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
++    return isUserSuperAdmin || (ev.creatorId !== undefined && ev.creatorId === currentUserId);
++  };
++
++  // Delete event handler
++  const deleteEvent = async (eventId: string | number) => {
++    const eventToDel = events.find(e => e.id === eventId);
++    if (!eventToDel) return;
++
++    // UI Feedback: Prompt confirmation dialog
++    if (!window.confirm('Adakah anda pasti untuk memadam acara ini?')) {
++      return;
++    }
++
++    try {
++      console.log(`[DELETE REQUEST] Deleting event ID: ${eventId}`);
++      if (typeof eventId === 'string') {
++        // If the ID is a string, delete the document from Firestore events collection
++        await deleteDoc(doc(db, 'events', eventId));
++        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}" dari database`, 'success');
++      } else {
++        // Mock event local state refresh fallback
++        triggerToast(`Berjaya memadamkan acara "${eventToDel.title}"`, 'success');
++      }
++
++      // Add to deleted IDs in localStorage to persist across refreshes
++      try {
++        const saved = localStorage.getItem('mvoc_deleted_event_ids');
++        const deletedIds = saved ? JSON.parse(saved) : [];
++        if (!deletedIds.includes(eventId)) {
++          deletedIds.push(eventId);
++          localStorage.setItem('mvoc_deleted_event_ids', JSON.stringify(deletedIds));
++        }
++      } catch (e) {
++        console.warn("Failed to save deleted event ID to localStorage:", e);
++      }
++
++      // State Refresh: filter out the deleted event to immediately reflect on UI
++      setEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
++    } catch (err: any) {
++      console.error("Error deleting event:", err);
++      triggerToast(`Gagal memadamkan acara: ${err.message || err}`, 'error');
++    }
++  };
++
++
+   // Handle simulated logout
+   const handleLogout = async () => {
+     try {
+@@ -2750,9 +2964,10 @@ function AppContent({
+       mvocId: displayMvocId,
+       name: displayName,
+       chapter: displayChapter,
+-      photoURL: safeAvatarUrl
++      photoURL: safeAvatarUrl,
++      ts: qrTimestamp
+     });
+-  }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl]);
++  }, [userProfile, auth.currentUser, displayMvocId, displayName, displayChapter, displayAvatarUrl, qrTimestamp]);
+ 
+   const rewardsInfo = useMemo(() => {
+     const meetsCompliance = userProfile?.disclaimerAccepted === true &&
+@@ -5951,12 +6166,11 @@ function AppContent({
+                                     >
+                                       <Share2 className="w-4 h-4 shrink-0" />
+                                     </button>
+-                                    {isAdminOrSuperAdmin() && (
++                                    {canDeleteEvent(ev) && (
+                                       <button 
+-                                        onClick={() => {
+-                                          setEventToDelete(ev);
+-                                          setIsDeleteEventModalOpen(true);
+-                                          setDeleteEventConfirmText('');
++                                        onClick={(e) => {
++                                          e.stopPropagation();
++                                          deleteEvent(ev.id);
+                                         }}
+                                         className="p-2.5 bg-red-50 text-red-650 hover:bg-red-100 rounded-lg transition cursor-pointer border border-red-150"
+                                         id={`delete-btn-${ev.id}`}
+@@ -7786,6 +8000,7 @@ function AppContent({
+                   activeView="users"
+                   currentUserRole={displayRole}
+                   isMasterAdmin={isMasterAdmin}
++                  eventsList={events}
+                 />
+               )}
+ 
+@@ -9398,6 +9613,30 @@ function AppContent({
+                     className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-mono text-white focus:outline-none focus:border-emerald-500"
+                   />
+                 </div>
++
++                <div className="grid grid-cols-2 gap-3.5">
++                  <div className="space-y-1">
++                    <label className="text-[10px] text-slate-405 font-bold uppercase block">Latitude</label>
++                    <input
++                      type="text"
++                      value={newEventLatitude}
++                      onChange={(e) => setNewEventLatitude(e.target.value)}
++                      placeholder="e.g., 3.1390"
++                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans"
++                    />
++                  </div>
++
++                  <div className="space-y-1">
++                    <label className="text-[10px] text-slate-405 font-bold uppercase block">Longitude</label>
++                    <input
++                      type="text"
++                      value={newEventLongitude}
++                      onChange={(e) => setNewEventLongitude(e.target.value)}
++                      placeholder="e.g., 101.6869"
++                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 font-sans"
++                    />
++                  </div>
++                </div>
+               </div>
+ 
+               <div className="flex gap-2.5 pt-3">
+@@ -9408,33 +9647,43 @@ function AppContent({
+                   Cancel
+                 </button>
+                 <button
+-                  onClick={() => {
++                  onClick={async () => {
+                     if (!newEventTitle.trim() || !newEventDate.trim()) {
+                       triggerToast('Event Title and Date are required.', 'warning');
+                       return;
+                     }
+-                    const newId = events.length > 0 ? Math.max(...events.map(e => e.id)) + 1 : 1;
+-                    const createdEvent: EventItem = {
+-                      id: newId,
+-                      title: newEventTitle,
+-                      date: newEventDate,
+-                      location: newEventLocation || 'Kuala Lumpur, Malaysia',
+-                      rsvps: 0,
+-                      limit: 150,
+-                      featured: true,
+-                      registered: false,
+-                      organizer: newEventOrganizer || 'HQ',
+-                      badge: newEventBadge,
+-                      image: newEventImage,
+-                      category: newEventCategory
+-                    };
+-                    setEvents([createdEvent, ...events]);
+-                    triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
+-                    setIsCreateEventModalOpen(false);
+-                    setNewEventTitle('');
+-                    setNewEventLocation('');
+-                    setNewEventDate('');
+-                    setNewEventOrganizer('');
++                    try {
++                      const eventData = {
++                        title: newEventTitle,
++                        date: newEventDate,
++                        location: newEventLocation || 'Kuala Lumpur, Malaysia',
++                        rsvps: 0,
++                        limit: 150,
++                        featured: true,
++                        registered: false,
++                        organizer: newEventOrganizer || 'HQ',
++                        badge: newEventBadge || 'OPEN',
++                        image: newEventImage || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
++                        category: newEventCategory || 'upcoming',
++                        warningText: '',
++                        creatorId: auth.currentUser?.uid || '',
++                        latitude: newEventLatitude ? Number(newEventLatitude) : 3.1390,
++                        longitude: newEventLongitude ? Number(newEventLongitude) : 101.6869
++                      };
++                      await addDoc(collection(db, 'events'), eventData);
++                      triggerToast(`Successfully created event "${newEventTitle}"!`, 'success');
++                    } catch (err: any) {
++                      console.error("Error creating event:", err);
++                      triggerToast(`Failed to create event: ${err.message || err}`, 'error');
++                    } finally {
++                      setIsCreateEventModalOpen(false);
++                      setNewEventTitle('');
++                      setNewEventLocation('');
++                      setNewEventDate('');
++                      setNewEventOrganizer('');
++                      setNewEventLatitude('');
++                      setNewEventLongitude('');
++                    }
+                   }}
+                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
+                 >
+@@ -9507,12 +9756,23 @@ function AppContent({
+                 <button
+                   type="button"
+                   disabled={deleteEventConfirmText !== 'DELETE'}
+-                  onClick={() => {
+-                    setEvents(events.filter(e => e.id !== eventToDelete.id));
+-                    triggerToast(`Successfully deleted event "${eventToDelete.title}"`, 'success');
+-                    setIsDeleteEventModalOpen(false);
+-                    setEventToDelete(null);
+-                    setDeleteEventConfirmText('');
++                  onClick={async () => {
++                    try {
++                      if (typeof eventToDelete.id === 'string') {
++                        await deleteDoc(doc(db, 'events', eventToDelete.id));
++                        triggerToast(`Successfully deleted event "${eventToDelete.title}" from database`, 'success');
++                      } else {
++                        setEvents(events.filter(e => e.id !== eventToDelete.id));
++                        triggerToast(`Successfully deleted event "${eventToDelete.title}"`, 'success');
++                      }
++                    } catch (err: any) {
++                      console.error("Error deleting event:", err);
++                      triggerToast(`Failed to delete event: ${err.message || err}`, 'error');
++                    } finally {
++                      setIsDeleteEventModalOpen(false);
++                      setEventToDelete(null);
++                      setDeleteEventConfirmText('');
++                    }
+                   }}
+                   className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-black text-xs rounded-xl transition uppercase tracking-wider cursor-pointer text-center"
+                 >
+@@ -9855,7 +10115,7 @@ function AppContent({
+ 
+               <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 inline-flex items-center justify-center relative">
+                 <QRCodeSVG 
+-                  value={generatedQrPayload} 
++                  value={generatedQrPayload.startsWith('http') ? generatedQrPayload : `${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(generatedQrPayload)}`} 
+                   size={220} 
+                   level="H"
+                   includeMargin={false}
+@@ -9967,48 +10227,111 @@ function AppContent({
+                           setIsSavingContact(true);
+                           const { setDoc, getDoc, serverTimestamp, doc } = await import('firebase/firestore');
+                           
+-                          const qrRef = doc(db, 'qrCodes', parsed.refId);
+-                          const qrSnap = await getDoc(qrRef);
+-                          if (qrSnap.exists()) {
+-                            const qrData = qrSnap.data();
+-                            if (qrData.status === 'disabled') {
+-                              triggerToast('This QR Code has been disabled by the administrator.', 'error');
+-                              await logQRScan('failed', `Failed check-in: QR code '${parsed.name || parsed.refId}' is disabled`, scanResult);
+-                              setIsSavingContact(false);
+-                              return;
+-                            }
+-                            if (qrData.expiresAt) {
+-                              const expiryDate = qrData.expiresAt.toDate ? qrData.expiresAt.toDate() : new Date(qrData.expiresAt);
+-                              if (new Date() > expiryDate) {
+-                                triggerToast('This QR Code has expired.', 'error');
+-                                await logQRScan('failed', `Failed check-in: QR code '${parsed.name || parsed.refId}' has expired`, scanResult);
+-                                setIsSavingContact(false);
+-                                return;
+-                              }
+-                            }
++                          // Enforce Geolocation check
++                          if (!navigator.geolocation) {
++                            triggerToast('Penyemak imbas anda tidak menyokong Geolocation. Akses GPS diperlukan untuk Geofencing.', 'error');
++                            await logQRScan('failed', 'Failed check-in: Browser lacks Geolocation support', scanResult);
++                            setIsSavingContact(false);
++                            return;
+                           }
+ 
+-                          // Ensure parent document exists with proper metadata
+-                          await setDoc(doc(db, 'attendance', parsed.refId), {
+-                            title: parsed.name || 'Untitled Session',
+-                            context: parsed.context || 'general',
+-                            createdAt: new Date().toISOString(),
+-                            type: 'attendance',
+-                            updatedAt: new Date().toISOString()
+-                          }, { merge: true });
++                          navigator.geolocation.getCurrentPosition(
++                            async (position) => {
++                              const memberLat = position.coords.latitude;
++                              const memberLon = position.coords.longitude;
++
++                              try {
++                                let eventCoords: { latitude: number; longitude: number } | null = null;
++                                let eventTitle = parsed.name || 'Untitled Event';
++
++                                // Fetch event location details from Firestore
++                                const eventRef = doc(db, 'events', parsed.refId);
++                                const eventSnap = await getDoc(eventRef);
++                                if (eventSnap.exists()) {
++                                  const evData = eventSnap.data();
++                                  eventTitle = evData.title || eventTitle;
++                                  if (evData.latitude !== undefined && evData.longitude !== undefined) {
++                                    eventCoords = { latitude: Number(evData.latitude), longitude: Number(evData.longitude) };
++                                  }
++                                } else {
++                                  // Fallback to local events list
++                                  const localEv = events.find(e => String(e.id) === String(parsed.refId));
++                                  if (localEv) {
++                                    eventTitle = localEv.title;
++                                    if (localEv.latitude !== undefined && localEv.longitude !== undefined) {
++                                      eventCoords = { latitude: localEv.latitude, longitude: localEv.longitude };
++                                    }
++                                  }
++                                }
+ 
+-                          await setDoc(doc(db, 'attendance', parsed.refId, 'attendees', auth.currentUser!.uid), {
+-                            uid: auth.currentUser!.uid,
+-                            name: displayName,
+-                            mvocId: displayMvocId,
+-                            vehiclePlate: userProfile?.vehiclePlate || 'NO PLATE',
+-                            timestamp: serverTimestamp()
+-                          });
+-
+-                          await logQRScan('success', `Checked in successfully: ${parsed.name || 'Untitled Attendance Session'}`, scanResult);
+-                          triggerToast('Attendance successfully recorded!', 'success');
+-                          setIsScannerOpen(false);
+-                          setIsSavingContact(false);
++                                // Verify distance if event coordinates are set
++                                if (eventCoords) {
++                                  const dist = calculateDistance(memberLat, memberLon, eventCoords.latitude, eventCoords.longitude);
++                                  if (dist > 200) {
++                                    triggerToast(`Ralat Geofencing: Lokasi anda terlalu jauh (${(dist / 1000).toFixed(2)} km) dari tapak acara. Had dibenarkan: 200m.`, 'error');
++                                    await logQRScan('failed', `Geofencing Gagal: Ahli di luar sempadan (${Math.round(dist)}m) bagi acara ${eventTitle}`, scanResult);
++                                    setIsSavingContact(false);
++                                    return;
++                                  }
++                                }
++
++                                // Normal status and expiration checks
++                                const qrRef = doc(db, 'qrCodes', parsed.refId);
++                                const qrSnap = await getDoc(qrRef);
++                                if (qrSnap.exists()) {
++                                  const qrData = qrSnap.data();
++                                  if (qrData.status === 'disabled') {
++                                    triggerToast('This QR Code has been disabled by the administrator.', 'error');
++                                    await logQRScan('failed', `Failed check-in: QR code '${eventTitle}' is disabled`, scanResult);
++                                    setIsSavingContact(false);
++                                    return;
++                                  }
++                                  if (qrData.expiresAt) {
++                                    const expiryDate = qrData.expiresAt.toDate ? qrData.expiresAt.toDate() : new Date(qrData.expiresAt);
++                                    if (new Date() > expiryDate) {
++                                      triggerToast('This QR Code has expired.', 'error');
++                                      await logQRScan('failed', `Failed check-in: QR code '${eventTitle}' has expired`, scanResult);
++                                      setIsSavingContact(false);
++                                      return;
++                                    }
++                                  }
++                                }
++
++                                // Ensure parent document exists with proper metadata
++                                await setDoc(doc(db, 'attendance', parsed.refId), {
++                                  title: eventTitle,
++                                  context: parsed.context || 'general',
++                                  createdAt: new Date().toISOString(),
++                                  type: 'attendance',
++                                  updatedAt: new Date().toISOString()
++                                }, { merge: true });
++
++                                await setDoc(doc(db, 'attendance', parsed.refId, 'attendees', auth.currentUser!.uid), {
++                                  uid: auth.currentUser!.uid,
++                                  name: displayName,
++                                  mvocId: displayMvocId,
++                                  vehiclePlate: userProfile?.vehiclePlate || 'NO PLATE',
++                                  timestamp: serverTimestamp(),
++                                  gpsLocation: { lat: memberLat, lon: memberLon }
++                                });
++
++                                await logQRScan('success', `Checked in successfully (Geofenced Scan): ${eventTitle}`, scanResult);
++                                triggerToast('Attendance successfully recorded!', 'success');
++                                setIsScannerOpen(false);
++                              } catch (err: any) {
++                                triggerToast(`Failed to register: ${err.message || String(err)}`, 'error');
++                              } finally {
++                                setIsSavingContact(false);
++                              }
++                            },
++                            async (err) => {
++                              console.warn('Geolocation member error:', err);
++                              triggerToast('Gagal mendapatkan lokasi GPS anda. Akses GPS diperlukan untuk mengesahkan kehadiran.', 'error');
++                              await logQRScan('failed', 'Failed check-in: Member GPS access denied or timed out', scanResult);
++                              setIsSavingContact(false);
++                            },
++                            { enableHighAccuracy: true, timeout: 8000 }
++                          );
+                           return;
+                         }
+ 
+diff --git a/src/components/AdminDashboard.tsx b/src/components/AdminDashboard.tsx
+index 39f18af..98a3b1f 100644
+--- a/src/components/AdminDashboard.tsx
++++ b/src/components/AdminDashboard.tsx
+@@ -54,6 +54,7 @@ interface AdminDashboardProps {
+   activeView?: 'members' | 'users';
+   currentUserRole?: string;
+   isMasterAdmin?: boolean;
++  eventsList?: any[];
+ }
+ 
+ export default function AdminDashboard({
+@@ -74,7 +75,8 @@ export default function AdminDashboard({
+   displayEmail,
+   triggerToast,
+   currentUserRole = 'member',
+-  isMasterAdmin = false
++  isMasterAdmin = false,
++  eventsList = []
+ }: AdminDashboardProps) {
+ 
+   const isCurrentUserMasterAdmin = isMasterAdmin || displayEmail.toLowerCase() === MASTER_EMAIL;
+@@ -823,6 +825,7 @@ export default function AdminDashboard({
+ 
+       {isScannerOpen && (
+         <QREventScanner 
++          events={eventsList}
+           onClose={() => setIsScannerOpen(false)}
+           triggerToast={triggerToast}
+         />
+diff --git a/src/components/AdminQRList.tsx b/src/components/AdminQRList.tsx
+index 800fb28..03aa32c 100644
+--- a/src/components/AdminQRList.tsx
++++ b/src/components/AdminQRList.tsx
+@@ -564,7 +564,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                   
+                   <div className="mt-5 p-5 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-200/60 shadow-inner">
+                     <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-100 flex flex-col items-center justify-center">
+-                      <QRCodeSVG value="https://mvoc-national-meet-2024-placeholder" size={120} level="H" />
++                      <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'event', refId: 'placeholder-event', name: 'MVOC National Meet 2024' }))}`} size={120} level="H" />
+                     </div>
+                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Event Attendance</span>
+                   </div>
+@@ -624,7 +624,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                           <div className={`bg-white p-5 rounded-2xl shadow-md border border-slate-100 flex flex-col items-center justify-center transition-all ${isInactive ? 'opacity-20 grayscale' : ''}`}>
+                             <QRCodeSVG 
+                               id={`qr-event-${event.id}`} 
+-                              value={JSON.stringify({ type: 'attendance', context: 'event', refId: String(event.id), name: event.title })} 
++                              value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'event', refId: String(event.id), name: event.title }))}`} 
+                               size={120} 
+                               level="H" 
+                             />
+@@ -698,7 +698,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                         <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                       </div>
+                       <div className="mt-1">
+-                        <QRCodeSVG value="https://genting-drive-placeholder" size={90} level="H" />
++                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'convoy', refId: 'placeholder-convoy', name: 'Genting Highland Morning Drive' }))}`} size={90} level="H" />
+                       </div>
+                     </div>
+                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Convoy Check-in</span>
+@@ -770,7 +770,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                             <div className="mt-1">
+                               <QRCodeSVG 
+                                 id={`qr-convoy-${convoy.id}`} 
+-                                value={JSON.stringify({ type: 'attendance', context: 'convoy', refId: String(convoy.id), name: convoy.title || convoy.name })} 
++                                value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'convoy', refId: String(convoy.id), name: convoy.title || convoy.name }))}`} 
+                                 size={90} 
+                                 level="H" 
+                               />
+@@ -841,7 +841,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                         <span className="text-[7px] text-white/50 ml-1 font-bold">CHAPTER ENTRY</span>
+                       </div>
+                       <div className="bg-white p-3.5 flex justify-center items-center">
+-                        <QRCodeSVG value="https://klang-valley-placeholder" size={80} level="H" />
++                        <QRCodeSVG value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: 'placeholder-chapter', name: 'Klang Valley Chapter Gathering' }))}`} size={80} level="H" />
+                       </div>
+                     </div>
+                     <span className="text-[10px] font-black text-[#0e2340] mt-3 uppercase tracking-wider">Chapter Entry</span>
+@@ -909,7 +909,7 @@ export default function AdminQRList({ onClose, triggerToast, isAdmin }: AdminQRL
+                             <div className="bg-white p-3.5 flex justify-center items-center">
+                               <QRCodeSVG 
+                                 id={`qr-attendance-${session.id}`} 
+-                                value={JSON.stringify({ type: 'attendance', context: 'general', refId: String(session.id), name: session.title })} 
++                                value={`${window.location.origin}?action=attendance&qrPayload=${encodeURIComponent(JSON.stringify({ type: 'attendance', context: 'general', refId: String(session.id), name: session.title }))}`} 
+                                 size={80} 
+                                 level="H" 
+                               />
+diff --git a/src/components/QREventScanner.tsx b/src/components/QREventScanner.tsx
+index aeb2387..b6f30d0 100644
+--- a/src/components/QREventScanner.tsx
++++ b/src/components/QREventScanner.tsx
+@@ -1,127 +1,542 @@
+-import React, { useState } from 'react';
++import React, { useState, useEffect } from 'react';
+ import { Scanner } from '@yudiel/react-qr-scanner';
+-import { X, CheckCircle, AlertTriangle } from 'lucide-react';
++import { X, CheckCircle, AlertTriangle, MapPin, Compass, ShieldAlert, Award, RefreshCw, Smartphone } from 'lucide-react';
++import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc } from 'firebase/firestore';
++import { db, auth } from '../lib/firebase';
++
++interface EventItem {
++  id: string | number;
++  title: string;
++  location: string;
++  latitude?: number;
++  longitude?: number;
++  category?: string;
++  date?: string;
++}
+ 
+ interface QREventScannerProps {
++  events?: EventItem[];
+   onClose: () => void;
+   triggerToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+ }
+ 
+-export default function QREventScanner({ onClose, triggerToast }: QREventScannerProps) {
++// Haversine formula to calculate distance in meters between two GPS coordinates
++function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
++  const R = 6371000; // Earth radius in meters
++  const dLat = (lat2 - lat1) * Math.PI / 180;
++  const dLon = (lon2 - lon1) * Math.PI / 180;
++  const a = 
++    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
++    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
++    Math.sin(dLon / 2) * Math.sin(dLon / 2);
++  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++  return R * c;
++}
++
++export default function QREventScanner({ events = [], onClose, triggerToast }: QREventScannerProps) {
++  const [selectedEventId, setSelectedEventId] = useState<string | number>('');
+   const [scannedData, setScannedData] = useState<string | null>(null);
+   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
++  const [verificationError, setVerificationError] = useState<string | null>(null);
++  const [successMemberName, setSuccessMemberName] = useState<string>('');
++  
++  // Geofencing GPS state
++  const [adminCoords, setAdminCoords] = useState<{ latitude: number; longitude: number } | null>(null);
++  const [gpsStatus, setGpsStatus] = useState<'checking' | 'active' | 'denied' | 'error'>('checking');
++  const [gpsErrorMsg, setGpsErrorMsg] = useState<string>('');
++  const [bypassGeofence, setBypassGeofence] = useState<boolean>(true); // Default to true to allow easier testing, with visible warning
++  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
++
++  // Filter events: display Ongoing and Upcoming events as primary candidates for attendance scanning
++  const activeEvents = events.filter(e => e.category !== 'completed');
++  const currentEvent = events.find(e => String(e.id) === String(selectedEventId));
++
++  // Initialize selected event
++  useEffect(() => {
++    if (activeEvents.length > 0 && !selectedEventId) {
++      setSelectedEventId(activeEvents[0].id);
++    } else if (events.length > 0 && !selectedEventId) {
++      setSelectedEventId(events[0].id);
++    }
++  }, [events, activeEvents, selectedEventId]);
++
++  // Track Geolocation
++  useEffect(() => {
++    if (!navigator.geolocation) {
++      setGpsStatus('error');
++      setGpsErrorMsg('Penyemak imbas anda tidak menyokong Geolocation.');
++      return;
++    }
+ 
+-  const handleScan = (result: any) => {
++    setGpsStatus('checking');
++    const watchId = navigator.geolocation.watchPosition(
++      (position) => {
++        setAdminCoords({
++          latitude: position.coords.latitude,
++          longitude: position.coords.longitude
++        });
++        setGpsStatus('active');
++        setGpsErrorMsg('');
++      },
++      (error) => {
++        console.warn('GPS geolocation watch error:', error);
++        setGpsStatus(error.code === error.PERMISSION_DENIED ? 'denied' : 'error');
++        setGpsErrorMsg(
++          error.code === error.PERMISSION_DENIED
++            ? 'Akses lokasi disekat. Sila aktifkan GPS untuk Geofencing.'
++            : `Ralat GPS: ${error.message}`
++        );
++      },
++      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
++    );
++
++    return () => {
++      navigator.geolocation.clearWatch(watchId);
++    };
++  }, []);
++
++  // Recalculate distance when admin position or selected event changes
++  useEffect(() => {
++    if (adminCoords && currentEvent?.latitude && currentEvent?.longitude) {
++      const dist = calculateDistance(
++        adminCoords.latitude,
++        adminCoords.longitude,
++        currentEvent.latitude,
++        currentEvent.longitude
++      );
++      setCalculatedDistance(dist);
++    } else {
++      setCalculatedDistance(null);
++    }
++  }, [adminCoords, currentEvent]);
++
++  // Log scan attempts helper
++  const logScanAttempt = async (status: 'success' | 'failed', message: string, scannedPayload: string) => {
++    try {
++      await addDoc(collection(db, 'scanLogs'), {
++        uid: auth.currentUser?.uid || 'anonymous',
++        userName: auth.currentUser?.displayName || 'Admin',
++        userEmail: auth.currentUser?.email || '',
++        status,
++        message,
++        scannedPayload,
++        timestamp: serverTimestamp()
++      });
++    } catch (e) {
++      console.error('Failed to log scan attempt:', e);
++    }
++  };
++
++  const handleScan = async (result: any) => {
+     if (result && result.length > 0 && result[0].rawValue) {
+       const value = result[0].rawValue;
+-      if (scannedData === value) return; // Prevent duplicate immediate scans
++      if (scannedData === value || scanStatus !== 'idle') return; // Prevent duplicate scanning while processing
+       
+       setScannedData(value);
+-      
+-      let memberIdentifier = 'Member';
+-      let isValidPayload = false;
++      setVerificationError(null);
+ 
++      // Verify event is selected
++      if (!selectedEventId || !currentEvent) {
++        setScanStatus('error');
++        setVerificationError('Ralat: Sila pilih acara terlebih dahulu.');
++        triggerToast('Sila pilih acara terlebih dahulu.', 'error');
++        resetScannerWithDelay();
++        return;
++      }
++
++      let parsed: any;
+       try {
+-        const parsed = JSON.parse(value);
+-        if (parsed.mvocId || parsed.name) {
+-          isValidPayload = true;
+-          memberIdentifier = parsed.name ? `${parsed.name} (${parsed.mvocId})` : parsed.mvocId;
+-        }
++        parsed = JSON.parse(value);
+       } catch (e) {
+-        // Fallback for simple string QRs
+-        if (value.includes('MVOC')) {
+-          isValidPayload = true;
+-          memberIdentifier = value;
++        setScanStatus('error');
++        setVerificationError('Ralat: Kod QR bukan format ahli MVOC.');
++        triggerToast('Format Kod QR tidak sah', 'error');
++        await logScanAttempt('failed', `Scan gagal: Kod QR bukan JSON sah`, value);
++        resetScannerWithDelay();
++        return;
++      }
++
++      // Check fields
++      if (!parsed.uid || !parsed.mvocId || !parsed.name) {
++        setScanStatus('error');
++        setVerificationError('Ralat: Maklumat keahlian Kod QR tidak lengkap.');
++        triggerToast('Format ahli tidak sah', 'error');
++        await logScanAttempt('failed', `Scan gagal: Medan profil tidak lengkap`, value);
++        resetScannerWithDelay();
++        return;
++      }
++
++      // 1. Anti-Screenshot / Dynamic timestamp verification
++      const now = Date.now();
++      if (!parsed.ts) {
++        setScanStatus('error');
++        setVerificationError('Ralat: Tangkapan skrin (screenshot) dikesan. Kod QR ahli mestilah dijana secara langsung.');
++        triggerToast('Gagal: Kod QR statik dikesan.', 'error');
++        await logScanAttempt('failed', `Mencegah screenshot: Tiada timestamp untuk ${parsed.name}`, value);
++        resetScannerWithDelay();
++        return;
++      }
++
++      const timeDiffSeconds = Math.abs(now - parsed.ts) / 1000;
++      if (timeDiffSeconds > 90) { // 90 seconds window
++        setScanStatus('error');
++        setVerificationError(`Ralat: Kod QR telah luput (${Math.round(timeDiffSeconds)} saat lalu). Sila minta ahli paparkan kod QR yang baru.`);
++        triggerToast('Gagal: Kod QR telah tamat tempoh.', 'error');
++        await logScanAttempt('failed', `Mencegah screenshot: Kod QR luput (${Math.round(timeDiffSeconds)}s) untuk ${parsed.name}`, value);
++        resetScannerWithDelay();
++        return;
++      }
++
++      // 2. Geofencing GPS Verification
++      if (!bypassGeofence) {
++        if (!currentEvent.latitude || !currentEvent.longitude) {
++          setScanStatus('error');
++          setVerificationError('Ralat: Acara ini tidak mempunyai koordinat lokasi yang ditetapkan.');
++          triggerToast('Lokasi acara tiada koordinat GPS', 'error');
++          resetScannerWithDelay();
++          return;
++        }
++
++        if (gpsStatus !== 'active' || !adminCoords) {
++          setScanStatus('error');
++          setVerificationError('Ralat: GPS Admin tidak aktif. Aktifkan GPS untuk melakukan pengesahan geofencing.');
++          triggerToast('Gagal: GPS Admin tidak dikesan.', 'error');
++          resetScannerWithDelay();
++          return;
++        }
++
++        const distance = calculateDistance(
++          adminCoords.latitude,
++          adminCoords.longitude,
++          currentEvent.latitude,
++          currentEvent.longitude
++        );
++
++        if (distance > 200) { // Outside 200m limit
++          setScanStatus('error');
++          setVerificationError(`Ralat Geofencing: Ahli/Admin berada di luar kawasan acara. Jarak dikesan: ${(distance / 1000).toFixed(2)} km. Had dibenarkan: 200 meter.`);
++          triggerToast('Gagal: Di luar sempadan geofencing.', 'error');
++          await logScanAttempt(
++            'failed',
++            `Geofencing gagal: ${parsed.name} di luar sempadan (${Math.round(distance)}m) untuk ${currentEvent.title}`,
++            value
++          );
++          resetScannerWithDelay();
++          return;
+         }
+       }
+ 
+-      // Simulate verifying and logging the attendance
+-      if (isValidPayload) {
++      // 3. Duplicate Attendance Check
++      try {
++        const attendeeRef = doc(db, 'attendance', String(currentEvent.id), 'attendees', parsed.uid);
++        const attendeeSnap = await getDoc(attendeeRef);
++        
++        if (attendeeSnap.exists()) {
++          setScanStatus('error');
++          setVerificationError('Ralat: Ahli ini telah pun disahkan hadir untuk acara ini.');
++          triggerToast('Ahli sudah mendaftar kehadiran.', 'warning');
++          await logScanAttempt('failed', `Mencegah pertindihan: ${parsed.name} telah berdaftar untuk ${currentEvent.title}`, value);
++          resetScannerWithDelay();
++          return;
++        }
++
++        // 4. Save to Firestore & Award Points (+30 XP)
++        const eventIdStr = String(currentEvent.id);
++        
++        // Ensure root attendance doc exists
++        await setDoc(doc(db, 'attendance', eventIdStr), {
++          title: currentEvent.title,
++          context: 'event',
++          type: 'attendance',
++          updatedAt: new Date().toISOString()
++        }, { merge: true });
++
++        // Save attendee record
++        await setDoc(attendeeRef, {
++          uid: parsed.uid,
++          name: parsed.name,
++          mvocId: parsed.mvocId,
++          chapter: parsed.chapter || '',
++          scannedBy: auth.currentUser?.uid || 'unknown',
++          scannedByName: auth.currentUser?.displayName || 'Admin',
++          timestamp: serverTimestamp(),
++          gpsLocation: adminCoords ? { lat: adminCoords.latitude, lon: adminCoords.longitude } : null,
++          distanceMeters: calculatedDistance || 0,
++          bypassedGeofence: bypassGeofence
++        });
++
++        // Award +30 points to member's user profile
++        const userProfileRef = doc(db, 'users', parsed.uid);
++        await updateDoc(userProfileRef, {
++          points: increment(30)
++        });
++
++        setSuccessMemberName(parsed.name);
+         setScanStatus('success');
+-        triggerToast(`Successfully logged attendance for ${memberIdentifier}`, 'success');
+-      } else {
++        triggerToast(`Kehadiran ${parsed.name} berjaya direkodkan! (+30 XP)`, 'success');
++        await logScanAttempt(
++          'success',
++          `Pendaftaran hadir berjaya: ${parsed.name} (${parsed.mvocId}) untuk ${currentEvent.title}`,
++          value
++        );
++      } catch (err: any) {
++        console.error('Firebase save attendance error:', err);
+         setScanStatus('error');
+-        triggerToast('Invalid MVOC QR Code', 'error');
++        setVerificationError(`Ralat Sistem: Gagal merekodkan kehadiran ke pangkalan data. ${err.message || String(err)}`);
++        triggerToast('Ralat pangkalan data.', 'error');
++        resetScannerWithDelay();
++        return;
+       }
+-      
+-      // Reset after 3 seconds
+-      setTimeout(() => {
+-        setScannedData(null);
+-        setScanStatus('idle');
+-      }, 3000);
++
++      resetScannerWithDelay();
+     }
+   };
+ 
++  const resetScannerWithDelay = () => {
++    setTimeout(() => {
++      setScannedData(null);
++      setScanStatus('idle');
++      setVerificationError(null);
++    }, 4000);
++  };
++
+   const handleError = (error: any) => {
+     console.error('QR Scanner Error:', error);
+     if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
+-      triggerToast('Camera access denied. Please enable camera permissions in your browser settings.', 'error');
+-      setScanStatus('error');
+-    } else if (error?.name === 'NotFoundError') {
+-      triggerToast('No back camera found on this device.', 'error');
++      triggerToast('Akses kamera disekat. Sila benarkan akses kamera.', 'error');
+       setScanStatus('error');
++      setVerificationError('Akses kamera disekat oleh pelayar.');
+     }
+   };
+ 
+   return (
+     <div 
+-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0b1c30]/90 backdrop-blur-sm"
++      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#071322]/95 backdrop-blur-md"
+       style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+     >
+-      <div className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl flex flex-col h-full max-h-[85vh]">
+-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 relative shrink-0 rounded-t-[24px]">
++      <div className="relative w-full max-w-md bg-[#0d1f35]/95 border border-[#1e3d64] rounded-[24px] shadow-2xl flex flex-col h-full max-h-[90vh] overflow-hidden text-slate-100">
++        
++        {/* Header section */}
++        <div className="p-4 border-b border-[#1e3d64] flex items-center justify-between bg-[#0b1b2d] shrink-0">
+           <div>
+-            <h3 className="text-sm font-black text-[#0F2D52] tracking-tight uppercase">
+-              Event QR Scanner
++            <h3 className="text-xs font-black text-amber-500 tracking-wider uppercase">
++              Aliran Kedatangan Terbalik (Inverted Flow)
+             </h3>
+-            <p className="text-[10px] font-bold text-slate-500">
+-              Align member's digital card to scan
+-            </p>
++            <h2 className="text-sm font-extrabold text-white mt-0.5">
++              Imbas Kad QR Ahli
++            </h2>
+           </div>
+           <button
+             onClick={onClose}
+-            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-[#0f2d52] hover:text-white transition cursor-pointer"
++            className="w-8 h-8 flex items-center justify-center rounded-full bg-[#1b324d] text-slate-350 hover:bg-rose-600 hover:text-white transition duration-200 cursor-pointer"
+           >
+             <X className="w-4 h-4" />
+           </button>
+         </div>
+ 
+-        <div className="p-4 flex flex-col items-center justify-center bg-black aspect-square relative relative">
+-          <Scanner 
+-            constraints={{ facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }}
+-            onScan={handleScan}
+-            onError={handleError}
+-            components={{
+-              audio: false,
+-              // @ts-ignore
+-              tracker: true
+-            }}
+-          />
++        {/* Scrollable Scanner Body */}
++        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+           
+-          {/* Overlay Status */}
+-          {scanStatus !== 'idle' && (
+-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+-              {scanStatus === 'success' ? (
+-                <div className="flex flex-col items-center p-6 bg-emerald-500 text-white rounded-2xl">
+-                  <CheckCircle className="w-16 h-16 mb-2" />
+-                  <span className="font-black">VERIFIED</span>
+-                </div>
++          {/* 1. Selector Acara */}
++          <div className="space-y-1.5">
++            <label className="text-[10px] text-amber-400 font-extrabold uppercase tracking-wider block">
++              Pilih Acara Sukan/Konvoi
++            </label>
++            <select
++              value={selectedEventId}
++              onChange={(e) => {
++                setSelectedEventId(e.target.value);
++                setScannedData(null);
++                setScanStatus('idle');
++              }}
++              className="w-full bg-[#0a1829] border border-[#1e3d64] rounded-xl py-3 px-3 text-xs font-bold text-white focus:outline-none focus:border-amber-500 cursor-pointer font-sans"
++            >
++              {events.length === 0 ? (
++                <option value="">Tiada Acara Dijumpai</option>
+               ) : (
+-                <div className="flex flex-col items-center p-6 bg-rose-500 text-white rounded-2xl">
+-                  <AlertTriangle className="w-16 h-16 mb-2" />
+-                  <span className="font-black">INVALID</span>
+-                </div>
++                <>
++                  <optgroup label="Sedang Berlangsung / Akan Datang">
++                    {activeEvents.map(e => (
++                      <option key={e.id} value={e.id}>{e.title} ({e.location})</option>
++                    ))}
++                  </optgroup>
++                  <optgroup label="Selesai (Completed)">
++                    {events.filter(e => e.category === 'completed').map(e => (
++                      <option key={e.id} value={e.id}>{e.title} ({e.location})</option>
++                    ))}
++                  </optgroup>
++                </>
+               )}
++            </select>
++            {currentEvent && (
++              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold bg-[#0b1624] px-3 py-2 rounded-lg border border-[#14293f]">
++                <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
++                <span>Koordinat Acara: {currentEvent.latitude || 'Tiada'}, {currentEvent.longitude || 'Tiada'}</span>
++              </div>
++            )}
++          </div>
++
++          {/* 2. Geofencing GPS Panel */}
++          <div className="bg-[#0b1726] border border-[#182f4b] rounded-xl p-3.5 space-y-3">
++            <div className="flex items-center justify-between">
++              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Status GPS Geofencing</span>
++              <div className="flex items-center gap-1.5">
++                {gpsStatus === 'checking' && (
++                  <span className="text-[9px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 flex items-center gap-1 font-bold">
++                    <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Mengesan...
++                  </span>
++                )}
++                {gpsStatus === 'active' && (
++                  <span className="text-[9px] bg-emerald-500/10 text-emerald-450 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-bold">
++                    <Compass className="w-2.5 h-2.5 animate-pulse text-emerald-400" /> GPS OK
++                  </span>
++                )}
++                {(gpsStatus === 'denied' || gpsStatus === 'error') && (
++                  <span className="text-[9px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded border border-rose-500/20 flex items-center gap-1 font-bold">
++                    <ShieldAlert className="w-2.5 h-2.5 text-rose-500" /> GPS Disekat
++                  </span>
++                )}
++              </div>
+             </div>
+-          )}
++
++            {gpsErrorMsg && (
++              <div className="text-[10px] text-rose-400 font-semibold bg-rose-500/5 p-2 rounded border border-rose-500/10">
++                {gpsErrorMsg}
++              </div>
++            )}
++
++            {adminCoords && (
++              <div className="text-[10px] font-mono grid grid-cols-2 gap-2 text-slate-350 bg-[#07101c] p-2 rounded border border-[#11243a]">
++                <div>Lat Admin: {adminCoords.latitude.toFixed(6)}</div>
++                <div>Lon Admin: {adminCoords.longitude.toFixed(6)}</div>
++              </div>
++            )}
++
++            {/* Direct Distance Display */}
++            {currentEvent?.latitude && currentEvent?.longitude && (
++              <div className="flex items-center justify-between border-t border-[#182f4b] pt-2.5">
++                <span className="text-[10px] text-slate-400 font-bold">Jarak Ke Lokasi Acara:</span>
++                <span className="text-[11px] font-extrabold flex items-center gap-1.5">
++                  {calculatedDistance !== null ? (
++                    calculatedDistance > 1000 ? (
++                      <span className={`${bypassGeofence ? 'text-slate-400' : 'text-rose-400'}`}>
++                        {(calculatedDistance / 1000).toFixed(2)} km
++                      </span>
++                    ) : (
++                      <span className={`${calculatedDistance <= 200 ? 'text-emerald-400' : (bypassGeofence ? 'text-slate-400' : 'text-rose-400')}`}>
++                        {Math.round(calculatedDistance)} meter
++                      </span>
++                    )
++                  ) : (
++                    <span className="text-slate-500">Kiraan Gagal</span>
++                  )}
++                  {calculatedDistance !== null && (
++                    calculatedDistance <= 200 ? (
++                      <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-emerald-500/20">Lulus</span>
++                    ) : (
++                      <span className="bg-rose-500/10 text-rose-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-rose-500/20">Di Luar Sempadan</span>
++                    )
++                  )}
++                </span>
++              </div>
++            )}
++
++            {/* Override Switch for local testing */}
++            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0e1e31] hover:bg-[#12263d] p-2.5 rounded-lg border border-[#193250] transition select-none">
++              <input 
++                type="checkbox" 
++                checked={bypassGeofence} 
++                onChange={(e) => setBypassGeofence(e.target.checked)} 
++                className="w-4 h-4 text-amber-500 bg-slate-900 rounded border-slate-700 focus:ring-0 cursor-pointer"
++              />
++              <div className="text-left">
++                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wide block">
++                  Pintas Geofencing (Untuk Ujian)
++                </span>
++                <span className="text-[9px] text-slate-400 font-medium">
++                  Benarkan imbasan walaupun di luar radius 200m
++                </span>
++              </div>
++            </label>
++          </div>
++
++          {/* 3. The Camera Scan window */}
++          <div className="aspect-square bg-black rounded-2xl overflow-hidden relative border border-[#1e3d64] shadow-inner">
++            <Scanner 
++              constraints={{ facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }}
++              onScan={handleScan}
++              onError={handleError}
++              components={{
++                audio: false,
++                // @ts-ignore
++                tracker: true
++              }}
++            />
++            
++            {/* Hologram Scanner Laser Line Effect */}
++            {scanStatus === 'idle' && (
++              <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center">
++                <div className="w-56 h-56 relative">
++                  <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-amber-400" />
++                  <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-amber-400" />
++                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-amber-400" />
++                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-amber-400" />
++                  
++                  <div className="w-full h-0.5 bg-amber-500/80 shadow-[0_0_10px_rgba(245,158,11,0.8)] absolute top-0 animate-[scanLaser_3s_infinite_linear]" />
++                </div>
++              </div>
++            )}
++
++            {/* Verification Status Modal Overlays */}
++            {scanStatus !== 'idle' && (
++              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-[#081525]/90 backdrop-blur-md animate-in fade-in duration-300">
++                {scanStatus === 'success' ? (
++                  <div className="flex flex-col items-center text-center space-y-3.5 bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl max-w-[280px]">
++                    <div className="w-14 h-14 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/35">
++                      <CheckCircle className="w-8 h-8" />
++                    </div>
++                    <div>
++                      <h4 className="text-xs font-black text-emerald-450 uppercase tracking-widest">KEHADIRAN SAH</h4>
++                      <p className="text-sm font-extrabold text-white mt-1 leading-snug">{successMemberName}</p>
++                      <p className="text-[10px] text-emerald-400 font-bold mt-2 bg-emerald-500/10 py-1 px-2.5 rounded-full inline-flex items-center gap-1.5 border border-emerald-500/20">
++                        <Award className="w-3.5 h-3.5" /> Ganjaran +30 XP Diberikan
++                      </p>
++                    </div>
++                  </div>
++                ) : (
++                  <div className="flex flex-col items-center text-center space-y-3.5 bg-rose-500/10 border border-rose-500/30 p-6 rounded-2xl max-w-[280px]">
++                    <div className="w-14 h-14 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-rose-500/35">
++                      <AlertTriangle className="w-8 h-8" />
++                    </div>
++                    <div>
++                      <h4 className="text-xs font-black text-rose-450 uppercase tracking-widest">IMBASAN DITOLAK</h4>
++                      <p className="text-[10px] font-semibold text-rose-300 mt-2 bg-rose-500/10 border border-rose-500/20 rounded-lg p-2 leading-relaxed text-left">
++                        {verificationError || 'Kod QR ahli tidak sah atau telah luput.'}
++                      </p>
++                    </div>
++                  </div>
++                )}
++              </div>
++            )}
++          </div>
+         </div>
+-        
+-        <div className="p-4 bg-slate-50 text-center rounded-b-[24px]">
+-           <p className="text-xs text-slate-500 font-medium">
+-             Camera is active. Scanner will log attendance automatically.
+-           </p>
++
++        {/* Footer info bar */}
++        <div className="p-3 bg-[#0b1b2d] border-t border-[#1e3d64] text-center shrink-0">
++          <p className="text-[10px] text-slate-400 font-bold flex items-center justify-center gap-1.5">
++            <Smartphone className="w-3.5 h-3.5 text-amber-500" />
++            <span>Kamera aktif. Pastikan ahli menggunakan kod QR dinamik terkini.</span>
++          </p>
+         </div>
+       </div>
++
++      <style>{`
++        @keyframes scanLaser {
++          0% { top: 0%; }
++          50% { top: 100%; }
++          100% { top: 0%; }
++        }
++      `}</style>
+     </div>
+   );
+ }

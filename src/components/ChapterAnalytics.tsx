@@ -4,13 +4,18 @@ import { SyncedUserProfile } from '../lib/fetchAndSyncData';
 
 interface ChapterAnalyticsProps {
   members: SyncedUserProfile[];
-  chapter: string;
+  chapter: string | string[];
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#0f2d52', '#f43f5e'];
 
 export default function ChapterAnalytics({ members, chapter }: ChapterAnalyticsProps) {
-  const chapterMembers = useMemo(() => members.filter(m => m.chapter === chapter), [members, chapter]);
+  const chapterMembers = useMemo(() => {
+    if (Array.isArray(chapter)) {
+      return members.filter(m => chapter.includes(m.chapter));
+    }
+    return members.filter(m => m.chapter === chapter);
+  }, [members, chapter]);
 
   const stats = useMemo(() => {
     const active = chapterMembers.filter(m => m.status === 'active').length;

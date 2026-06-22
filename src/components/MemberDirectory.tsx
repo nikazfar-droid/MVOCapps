@@ -21,6 +21,7 @@ import { isValidWhatsAppNumber } from '../lib/phoneUtils';
 interface SimpleMember {
   uid: string;
   name: string;
+  shortName?: string;
   mvocId: string;
   chapter: string;
   tier: 'GOLD' | 'STANDARD';
@@ -29,7 +30,7 @@ interface SimpleMember {
   isWhatsAppPublic?: boolean;
   officialPatch?: boolean;
   role?: string;
-  managedChapter?: string;
+  managedChapter?: string | string[];
   photoURL?: string;
   bloodType?: string;
   vehiclePlate?: string;
@@ -87,6 +88,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
         cleanList.push({
           uid: docSnap.id,
           name: data.name || data.fullName || 'Anonymous Member',
+          shortName: data.shortName,
           mvocId: data.mvocId || 'Pending ID',
           chapter: data.chapter || 'Kuala Lumpur Chapter',
           tier: data.tier === 'GOLD' ? 'GOLD' : 'STANDARD',
@@ -146,6 +148,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
     if (!query) return true;
 
     return (
+      (mbr.shortName && mbr.shortName.toLowerCase().includes(query)) ||
       mbr.name.toLowerCase().includes(query) ||
       mbr.mvocId.toLowerCase().includes(query)
     );
@@ -280,7 +283,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                   {/* Name and MVOC-ID in a single line, optimized to avoid wrapping/clutter */}
                   <div className="flex items-center gap-2 min-w-0 pr-1 select-none">
                     <span className="text-slate-100 font-extrabold text-xs sm:text-sm truncate max-w-[120px] xs:max-w-[180px] sm:max-w-xs">
-                      {member.name}
+                      {member.shortName || member.name}
                     </span>
                     
                     {/* Compact Leader/Admin tag */}
@@ -439,7 +442,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
 
                 <div>
                   <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                    <h3 className="text-base font-display font-extrabold tracking-tight">{selectedMember.name}</h3>
+                    <h3 className="text-base font-display font-extrabold tracking-tight">{selectedMember.shortName || selectedMember.name}</h3>
                     {selectedMember.role === 'super_admin' && (
                       <span className="inline-flex items-center bg-rose-500 text-white font-black text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-md select-none font-sans shadow-md">
                         🛡️ Admin Council
@@ -477,7 +480,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                   {selectedMember.managedChapter && (
                     <div className="mt-2.5 flex justify-center">
                       <span className="px-2.5 py-1 text-[10px] font-bold bg-[#0f2d52] text-white rounded-full border border-blue-500/30 uppercase tracking-widest shadow-xs">
-                        {selectedMember.managedChapter}
+                        {Array.isArray(selectedMember.managedChapter) ? selectedMember.managedChapter.join(', ') : selectedMember.managedChapter}
                       </span>
                     </div>
                   )}

@@ -53,6 +53,7 @@ interface MerchantPartnersProps {
   isAdmin?: boolean;
   currentUserRole?: string;
   currentUserId?: string;
+  appConfig?: Record<string, boolean>;
 }
 
 const MERCHANT_DATA: MerchantItem[] = [
@@ -184,7 +185,7 @@ const MERCHANT_DATA: MerchantItem[] = [
   }
 ];
 
-export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAdmin = false, currentUserRole = 'member', currentUserId = '' }: MerchantPartnersProps) {
+export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAdmin = false, currentUserRole = 'member', currentUserId = '', appConfig }: MerchantPartnersProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantItem | null>(null);
@@ -782,6 +783,40 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
           </div>
         )}
       </div>
+
+      {/* Jom Jadi Rakan Strategik Banner */}
+      {appConfig?.sponsorship !== false && (
+      <div className="mt-8 relative overflow-hidden rounded-[24px] shadow-lg shadow-blue-900/10 border border-[#0F2D52]/10 bg-gradient-to-br from-[#0F2D52] to-[#1a427b] text-white">
+        {/* Decorative Background Elements */}
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-amber-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40"></div>
+        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-blue-400 rounded-full mix-blend-multiply filter blur-[60px] opacity-30"></div>
+        
+        <div className="relative p-6 sm:p-8 flex flex-col md:flex-row items-center gap-6 md:gap-8 text-center md:text-left z-10">
+          <div className="w-16 h-16 shrink-0 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shadow-inner">
+            <Gift className="w-8 h-8 text-amber-400" />
+          </div>
+          
+          <div className="flex-1 space-y-2">
+            <h3 className="font-display text-2xl font-black tracking-tight text-white drop-shadow-sm">
+              Jom Jadi Rakan Strategik MVOC
+            </h3>
+            <p className="text-blue-100 text-[13px] sm:text-sm font-medium leading-relaxed max-w-lg mx-auto md:mx-0">
+              Perkasakan jenama perniagaan anda ke ribuan pemilik kenderaan Vios di seluruh Malaysia. Dapatkan capaian premium sebagai 'Featured Merchant'.
+            </p>
+          </div>
+          
+          <div className="shrink-0 w-full md:w-auto">
+            <a 
+              href="/partner" 
+              className="inline-flex items-center justify-center w-full md:w-auto px-6 py-3.5 bg-amber-400 hover:bg-amber-300 text-[#0F2D52] font-black text-sm uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.3)] hover:shadow-[0_0_25px_rgba(251,191,36,0.5)] transition-all hover:-translate-y-0.5 active:scale-95"
+            >
+              Mohon Sekarang
+              <ChevronRight className="w-4 h-4 ml-1 -mr-1" />
+            </a>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* DETAIL MODAL WINDOW SCREEN - DETAILED WITH WORKBENCH INFRASTRUCTURE */}
       <AnimatePresence>

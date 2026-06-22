@@ -59,13 +59,21 @@ export interface SyncedUserProfile {
   chapter: string;
   tier: 'GOLD' | 'STANDARD';
   role: 'super_admin' | 'admin' | 'member';
-  managedChapter?: string;
+  managedChapter?: string | string[];
   photoURL?: string;
   createdAt: string;
   updatedAt: string;
   joinDate?: string;
   points?: number;
+  lastActivityDate?: string;
+  monthlyXp?: { [monthYear: string]: number };
+  majorEventCount?: number;
   status?: 'active' | 'suspended' | 'banned' | 'pending' | 'delete_requested' | 'deleted';
+  roleRequest?: {
+    role: 'super_admin' | 'admin';
+    requestedBy: string;
+    requestedAt: string;
+  };
   patch_status?: boolean;
   officialPatch?: boolean;
   patch_url?: string;
@@ -91,6 +99,56 @@ export function formatMvocId(input: string): string {
 
 export function ensureMvocPrefix(id: string): string {
   return formatMvocId(id);
+}
+
+/**
+ * Calculates effective XP after applying decay logic.
+ * Decay: -10% per month if inactive for > 90 days.
+ */
+export function calculateEffectiveXP(userProfile: Partial<SyncedUserProfile>): {
+  effectiveXP: number;
+  hasDecayed: boolean;
+  newLastActivityDate: string;
+} {
+  const baseXP = userProfile.points || 0;
+  if (!userProfile.lastActivityDate || baseXP <= 30) {
+    return { 
+      effectiveXP: baseXP, 
+      hasDecayed: false, 
+      newLastActivityDate: userProfile.lastActivityDate || new Date().toISOString() 
+    };
+  }
+
+  const lastActivity = new Date(userProfile.lastActivityDate);
+  const now = new Date();
+  
+  const diffTime = now.getTime() - lastActivity.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 90) {
+    return { effectiveXP: baseXP, hasDecayed: false, newLastActivityDate: userProfile.lastActivityDate };
+  }
+
+  const decayMonths = Math.floor((diffDays - 90) / 30) + 1;
+  
+  if (decayMonths <= 0) {
+    return { effectiveXP: baseXP, hasDecayed: false, newLastActivityDate: userProfile.lastActivityDate };
+  }
+
+  let currentXP = baseXP;
+  for (let i = 0; i < decayMonths; i++) {
+    currentXP = Math.floor(currentXP * 0.9);
+    if (currentXP < 30) {
+      currentXP = 30; // Floor at compliance baseline
+      break;
+    }
+  }
+
+  return {
+    effectiveXP: currentXP,
+    hasDecayed: true,
+    newLastActivityDate: userProfile.lastActivityDate
+  };
 }
 
 const GOOGLE_SHEET_ID = "1ZrZaf26p60i_n7ocJVp_yAw4xadNrjXodChaUWTrnmY";
@@ -172,7 +230,7 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
             fetchedData = {
               name: typeof nameVal === 'string' ? nameVal.trim() : targetEmail.split('@')[0],
               mvocId: ensureMvocPrefix(typeof mvocIdVal === 'string' ? mvocIdVal.trim() : `MVOC-PENDING-${Math.floor(10000 + Math.random() * 90000)}`),
-              chapter: typeof chapterVal === 'string' ? chapterVal.trim() : "Selangor Chapter",
+              chapter: typeof chapterVal === 'string' ? chapterVal.trim() : "Zone Klang Valley",
               tier: tierNormalized,
               vehiclePlate: typeof plateVal === 'string' ? plateVal.trim() : undefined,
               phoneNumber: typeof phoneVal === 'string' ? phoneVal.trim() : undefined
@@ -227,7 +285,7 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
                 fetchedData = {
                   name: nameVal ? nameVal.trim() : targetEmail.split('@')[0],
                   mvocId: ensureMvocPrefix(mvocIdVal ? mvocIdVal.trim() : `MVOC-PENDING-${Math.floor(10000 + Math.random() * 90000)}`),
-                  chapter: chapterVal ? chapterVal.trim() : "Selangor Chapter",
+                  chapter: chapterVal ? chapterVal.trim() : "Zone Klang Valley",
                   tier: tierNormalized,
                   vehiclePlate: plateVal ? plateVal.trim() : undefined,
                   phoneNumber: phoneVal ? phoneVal.trim() : undefined
@@ -253,7 +311,7 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
   const resolvedData = fetchedData || {
     name: "Nik Azfar Admin",
     mvocId: "MVOC-0001",
-    chapter: "Selangor Chapter",
+    chapter: "Zone Klang Valley",
     tier: "GOLD"
   };
 
@@ -273,7 +331,7 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
     email: targetEmail,
     name: resolvedData.name || existingProfile.name || (isSuperAdminEmail ? 'Nik Azfar Admin' : ''),
     mvocId: formatMvocId(resolvedData.mvocId || existingProfile.mvocId || (isSuperAdminEmail ? 'MVOC-0001' : '')),
-    chapter: resolvedData.chapter || existingProfile.chapter || 'Selangor Chapter',
+    chapter: resolvedData.chapter || existingProfile.chapter || 'Zone Klang Valley',
     tier: resolvedData.tier || existingProfile.tier || (isSuperAdminEmail ? 'GOLD' : 'STANDARD'),
     role: existingProfile.role || (isSuperAdminEmail ? 'super_admin' : 'member'),
     createdAt: existingProfile.createdAt || new Date().toISOString(),
@@ -344,6 +402,9 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
   }
   if (existingProfile.deleteRequestedAt !== undefined) {
     finalProfile.deleteRequestedAt = existingProfile.deleteRequestedAt;
+  }
+  if (existingProfile.roleRequest !== undefined) {
+    finalProfile.roleRequest = existingProfile.roleRequest;
   }
   if (existingProfile.patch_status !== undefined) {
     finalProfile.patch_status = existingProfile.patch_status;
@@ -435,7 +496,7 @@ export async function forceSyncAllUsers(dbInstance: any): Promise<number> {
         sheetsDataMap.set(lowerEmail, {
            name: typeof nameVal === 'string' ? nameVal.trim() : undefined,
            mvocId: ensureMvocPrefix(typeof mvocIdVal === 'string' ? mvocIdVal.trim() : `MVOC-PENDING-${Math.floor(10000 + Math.random() * 90000)}`),
-           chapter: typeof chapterVal === 'string' ? chapterVal.trim() : "Selangor Chapter",
+           chapter: typeof chapterVal === 'string' ? chapterVal.trim() : "Zone Klang Valley",
            tier: tierNormalized,
            vehiclePlate: typeof plateVal === 'string' ? plateVal.trim() : undefined,
            phoneNumber: typeof phoneVal === 'string' ? phoneVal.trim() : undefined

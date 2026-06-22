@@ -78,6 +78,7 @@ import StateChapters from './components/StateChapters';
 import MerchantPartners from './components/MerchantPartners';
 import DataSyncProvider, { useDataSync } from './components/DataSyncProvider';
 import AdminDashboard from './components/AdminDashboard';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 import AdminQRList from './components/AdminQRList';
 import BroadcastModule from './components/BroadcastModule';
 import MemberDirectory from './components/MemberDirectory';
@@ -85,9 +86,11 @@ import BlockedNotice from './components/BlockedNotice';
 import ErrorBoundary from './components/ErrorBoundary';
 import PWAInstaller from './components/PWAInstaller';
 import PWAUpdateNotifier from './components/PWAUpdateNotifier';
+import FaqPage from './components/FaqPage';
+import PartnerPage from './components/PartnerPage';
 import { auth, db } from './lib/firebase';
 import { collection, updateDoc, doc, deleteDoc, onSnapshot, setDoc, runTransaction, getDocsFromServer, query, where, orderBy, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { SyncedUserProfile, formatMvocId } from './lib/fetchAndSyncData';
+import { SyncedUserProfile, formatMvocId, calculateEffectiveXP } from './lib/fetchAndSyncData';
 import { formatWhatsAppNumber, isValidWhatsAppNumber } from './lib/phoneUtils';
 import { getTranslation } from './lib/translations';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -136,7 +139,7 @@ function parseEventDate(dateStr: string): number {
 }
 
 // Define core types
-type TabType = 'dashboard' | 'profile' | 'vehicle' | 'card' | 'events' | 'convoy' | 'gallery' | 'announcements' | 'chapters' | 'merchants' | 'admin' | 'users' | 'broadcast' | 'members' | 'directory';
+type TabType = 'dashboard' | 'profile' | 'vehicle' | 'card' | 'events' | 'convoy' | 'gallery' | 'announcements' | 'chapters' | 'merchants' | 'admin' | 'users' | 'broadcast' | 'members' | 'directory' | 'super_admin';
 
 interface Announcement {
   id: any;
@@ -180,6 +183,28 @@ interface EventItem {
 export default function App() {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  // Serve FAQ Page independently of Auth
+  if (window.location.pathname === '/faq') {
+    return (
+      <ErrorBoundary>
+        <FaqPage />
+      </ErrorBoundary>
+    );
+  }
+
+  // Add appConfig fetch unconditionally for /partner route?
+  // Wait, the hook is below. Let's do a simple check.
+  if (window.location.pathname === '/partner') {
+    // If we want to check appConfig here, we have a problem because appConfig is fetched in useEffect
+    // For a public route, maybe we don't strictly protect it, or we rely on the component itself?
+    // Actually, App.tsx renders PartnerPage directly. Let's pass appConfig down.
+    return (
+      <ErrorBoundary>
+        <PartnerPage />
+      </ErrorBoundary>
+    );
+  }
+
   const triggerToast = useCallback((text: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
     const resolvedType = type === 'warning' ? 'info' : type;
     setToastMessage({ text, type: resolvedType });
@@ -213,6 +238,7 @@ function AppContent({
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(!!auth.currentUser); 
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isTierModalOpen, setIsTierModalOpen] = useState(false);
   
   // 100% Network-Only: Clear all existing browser caches on application load to prevent stale data
   useEffect(() => {
@@ -385,7 +411,7 @@ function AppContent({
       setProfileBloodType(userProfile.bloodType || "Not Specified");
       setProfileJoinDate(userProfile.joinDate || "12 January 2021");
       setProfilePoints(userProfile.points?.toString() || "30");
-      setProfileChapter(userProfile.chapter || "Selangor Chapter");
+      setProfileChapter(userProfile.chapter || "Zone Klang Valley");
       setProfileVehiclePlate(userProfile.vehiclePlate || "");
       if ((userProfile as any).icNumber) setProfileIc((userProfile as any).icNumber);
       if ((userProfile as any).gender) setProfileGender((userProfile as any).gender);
@@ -546,6 +572,11 @@ function AppContent({
     }
     if (wordCount > 3) {
       triggerToast("Short Name mesti maksimum 3 perkataan sahaja.", 'error');
+      return;
+    }
+    
+    if (!profileChapter || profileChapter.trim() === '') {
+      triggerToast("State Chapter wajib dipilih.", 'error');
       return;
     }
 
@@ -806,7 +837,11 @@ function AppContent({
   const displayChapter = userProfile ? userProfile.chapter : "Pending sync...";
   const displayTier = userProfile ? userProfile.tier : "STANDARD";
   const displayRole = userProfile ? userProfile.role : "member";
-  const displayManagedChapter = userProfile ? (userProfile as any).managedChapter : null;
+  const displayManagedChapter = userProfile 
+    ? (Array.isArray((userProfile as any).managedChapter) 
+        ? ((userProfile as any).managedChapter as string[]).join(', ') 
+        : ((userProfile as any).managedChapter as string | null)) 
+    : null;
   const isSuperAdmin = displayRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
   const isMasterAdmin = displayEmail.toLowerCase() === MASTER_EMAIL || userProfile?.mvocId === MASTER_ADMIN_ID;
   const isStealthActive = isStealthMode && isMasterAdmin;
@@ -898,16 +933,32 @@ function AppContent({
   };
 
   const handleRoleChange = async (targetUser: SyncedUserProfile, newRole: 'super_admin' | 'admin' | 'member') => {
-    // Ensure that the local React state updates immediately so the UI reflects the change without needing a page refresh
-    setMembersList(prev => prev.map(m => m.uid === targetUser.uid ? { ...m, role: newRole } : m));
-    
     try {
       const userRef = doc(db, 'users', targetUser.uid);
-      // Ensure handleRoleChange uses an atomic updateDoc operation on the users collection
-      await updateDoc(userRef, { role: newRole });
+      
+      // If a normal admin tries to upgrade someone to admin/super_admin, intercept it
+      if (!isSuperAdmin && (newRole === 'admin' || newRole === 'super_admin')) {
+        const requestObj = {
+          role: newRole,
+          requestedBy: auth.currentUser?.uid || 'unknown',
+          requestedAt: new Date().toISOString()
+        };
+        await updateDoc(userRef, { roleRequest: requestObj });
+        
+        // Update local state to reflect the pending request
+        setMembersList(prev => prev.map(m => m.uid === targetUser.uid ? { ...m, roleRequest: requestObj } : m));
+        triggerToast('Permohonan menaik taraf akaun telah dihantar kepada Master Admin untuk kelulusan.', 'info');
+        return;
+      }
+
+      // Normal direct role change (by Super Admin, or downgrading)
+      // Ensure that the local React state updates immediately
+      setMembersList(prev => prev.map(m => m.uid === targetUser.uid ? { ...m, role: newRole, roleRequest: null } : m));
+      
+      // Atomic update
+      await updateDoc(userRef, { role: newRole, roleRequest: null });
       triggerToast(`Successfully updated ${targetUser.name}'s role to ${newRole.toUpperCase()}!`, 'success');
     } catch (err: any) {
-      // Add an error handling block to the update function to log any 'Permission Denied' errors in the console
       const errMsg = err?.message || String(err);
       if (errMsg.includes('Permission Denied') || errMsg.includes('permission-denied') || err?.code === 'permission-denied') {
         console.error("Permission Denied: Lacked authorization in firestore.rules to update role:", err);
@@ -1132,6 +1183,7 @@ function AppContent({
     announcements: true,
     directory: true,
     bottomNav: true,
+    sponsorship: true,
   });
 
   // Watch security-hardened remote settings config document
@@ -1154,6 +1206,7 @@ function AppContent({
             announcements: data.announcements !== false,
             directory: data.directory !== false,
             bottomNav: data.bottomNav !== false,
+            sponsorship: data.sponsorship !== false,
           });
         }
       }, (error) => {
@@ -2279,7 +2332,11 @@ function AppContent({
       if (aud === 'All Users') return true;
       if (aud === 'Gold Members' && (userTier === 'GOLD' || isUserAdminOrSuper)) return true;
       if (aud === 'Admins' && isUserAdminOrSuper) return true;
-      if (aud === 'Chapter Members' && (isUserAdminOrSuper || tc === userProfile?.chapter)) return true;
+      if (aud === 'Chapter Members') {
+        if (isUserAdminOrSuper) return true;
+        if (Array.isArray(tc)) return tc.includes(userProfile?.chapter || '');
+        return tc === userProfile?.chapter;
+      }
       return false;
     });
 
@@ -2358,8 +2415,8 @@ function AppContent({
     try {
       const chaptersCollectionRef = collection(db, 'chapters');
       const unsubscribe = onSnapshot(chaptersCollectionRef, async (snapshot) => {
-        if (snapshot.empty) {
-          console.log("[CHAPTER SYSTEM]: Firestore chapters collection is empty, initiating database seeding...");
+        if (snapshot.empty || snapshot.size < 17) {
+          console.log("[CHAPTER SYSTEM]: Firestore chapters collection is missing items, initiating database seeding...");
           const defaultList = [
             {
               id: 1,
@@ -2369,8 +2426,6 @@ function AppContent({
               subText: 'Selangor Chapter',
               membersCount: 452,
               iconType: 'building',
-              leadName: 'Khairul Nizam',
-              leadTitle: 'Chapter Lead',
               description: 'Covering Shah Alam, Subang Jaya, Petaling Jaya, and wider Selangor. Hosts frequent local dynamic cruises and partner garage meets.',
               meetupRoutine: 'Every Friday night at Shah Alam Stadium parking lot.',
               establishedDate: '15 March 2021',
@@ -2384,8 +2439,6 @@ function AppContent({
               subText: 'Federal Territory Chapter',
               membersCount: 312,
               iconType: 'building',
-              leadName: 'Marcus Tan',
-              leadTitle: 'Chapter Lead',
               description: 'The foundation chapter of MVOC. Kuala Lumpur hosts weekly mini-gatherings, technical dyno runs, and charity cruises. We represent the biggest cluster of Velox performance builds in the peninsula.',
               meetupRoutine: 'Every Friday night at KLCC outer bays, starting 09:30 PM.',
               establishedDate: '12 January 2021',
@@ -2399,8 +2452,6 @@ function AppContent({
               subText: 'Johor Chapter',
               membersCount: 288,
               iconType: 'arrow-down',
-              leadName: 'Zainal Abidin',
-              leadTitle: 'Chapter Lead',
               description: 'Uniting southern drivers across Johor Bahru, Muar, and Batu Pahat. Focuses on cross-border dynamic runs, car wash gatherings, and performance setups.',
               meetupRoutine: 'Last Friday night of the month at Danga Bay waterfront.',
               establishedDate: '01 February 2021',
@@ -2414,8 +2465,6 @@ function AppContent({
               subText: 'Penang Chapter',
               membersCount: 195,
               iconType: 'waves',
-              leadName: 'Lee Chong Wai',
-              leadTitle: 'Chapter Lead',
               description: 'Famous for Penang Bridge sunset convoys, hillside winding road cruises, and local culinary noodle run cruises.',
               meetupRoutine: 'Every alternate Sunday evening at Queensbay Mall waterfront.',
               establishedDate: '15 September 2021',
@@ -2429,8 +2478,6 @@ function AppContent({
               subText: 'Perak Chapter',
               membersCount: 167,
               iconType: 'arrow-up',
-              leadName: 'Ahmad Ridzuan',
-              leadTitle: 'Chapter Lead',
               description: 'Encompassing Ipoh, Taiping, and Teluk Intan. Perak chapter cruises historic towns, old trails, and mountain hill roads.',
               meetupRoutine: 'Monthly breakfast meetups in central Ipoh old town bays.',
               establishedDate: '12 November 2021',
@@ -2444,8 +2491,6 @@ function AppContent({
               subText: 'Pahang Chapter',
               membersCount: 142,
               iconType: 'waves',
-              leadName: 'Syed Al-Hafiz',
-              leadTitle: 'Chapter Lead',
               description: 'Embracing the scenic roads of Pahang. Leads long-range highway cruises, beach picnics, and rain driving clinics.',
               meetupRoutine: 'Monthly sunset gathering at Teluk Cempedak beach bays.',
               establishedDate: '10 July 2021',
@@ -2459,8 +2504,6 @@ function AppContent({
               subText: 'Negeri Sembilan Chapter',
               membersCount: 154,
               iconType: 'landmark',
-              leadName: 'Azman Shah',
-              leadTitle: 'Chapter Lead',
               description: 'Active chapter in Seremban and surrounding districts. Focused on scenic dynamic test drives and regular local coffee meetups.',
               meetupRoutine: 'Every second Saturday morning at Seremban Lake Gardens.',
               establishedDate: '01 June 2021',
@@ -2474,8 +2517,6 @@ function AppContent({
               subText: 'Melaka Chapter',
               membersCount: 110,
               iconType: 'building',
-              leadName: 'Faris Hazwan',
-              leadTitle: 'Chapter Lead',
               description: 'Historic Melaka chapter. Regular static evening cruises by heritage red builds, Klebang seashore picnics and beach drives.',
               meetupRoutine: 'First Saturday night of the month at Klebang beach dynamic bays.',
               establishedDate: '22 October 2021',
@@ -2489,8 +2530,6 @@ function AppContent({
               subText: 'Kedah Chapter',
               membersCount: 98,
               iconType: 'mountain',
-              leadName: 'Wan Aminudin',
-              leadTitle: 'Chapter Lead',
               description: 'Uniting paddy state cruisers in Alor Setar and Sungai Petani. Enjoys scenic mountain road cruises and agricultural fields vistas.',
               meetupRoutine: 'Monthly morning gatherings at Alor Setar tower outer belfry.',
               establishedDate: '05 January 2022',
@@ -2504,8 +2543,6 @@ function AppContent({
               subText: 'Kelantan Chapter',
               membersCount: 88,
               iconType: 'compass',
-              leadName: 'Raja Syahiran',
-              leadTitle: 'Chapter Lead',
               description: 'Proud East Coast drivers in Kota Bharu. Gathering at coastal sites, celebrating traditional local foods, and doing humanitarian welfare drives.',
               meetupRoutine: 'Every Friday afternoon at Pantai Cahaya Bulan bays.',
               establishedDate: '30 October 2021',
@@ -2519,8 +2556,6 @@ function AppContent({
               subText: 'Terengganu Chapter',
               membersCount: 74,
               iconType: 'anchor',
-              leadName: 'Hafizuddin Gading',
-              leadTitle: 'Chapter Lead',
               description: 'Beachside cruises in Kuala Terengganu. Known for authentic local oceanfront culinary runs, coastal highway cruising, and bridge photography.',
               meetupRoutine: 'Alternate Saturday evenings at Drawbridge KT outer parking square.',
               establishedDate: '15 September 2021',
@@ -2534,8 +2569,6 @@ function AppContent({
               subText: 'Sabah Chapter',
               membersCount: 165,
               iconType: 'mountain',
-              leadName: 'Aloysius Jipiu',
-              leadTitle: 'Chapter Lead',
               description: 'Borneo team in Land Below the Wind. Famous for high-altitude winding hill cruises around Kundasang and long coastal journeys.',
               meetupRoutine: 'Every third Sunday morning at Likas Bay waterfront parking.',
               establishedDate: '18 December 2021',
@@ -2549,8 +2582,6 @@ function AppContent({
               subText: 'Sarawak Chapter',
               membersCount: 122,
               iconType: 'waves',
-              leadName: 'Douglas Lim',
-              leadTitle: 'Chapter Lead',
               description: 'Borneo active crew cruising Kuching, Sibu, and Miri. Focused on cross-city drives, weekend mountain coffee climbs, and PWA networking sessions.',
               meetupRoutine: 'Last Sunday morning of the month at Kuching Waterfront bays.',
               establishedDate: '01 December 2021',
@@ -2564,12 +2595,49 @@ function AppContent({
               subText: 'Brunei Chapter',
               membersCount: 52,
               iconType: 'landmark',
-              leadName: 'Jefri Bolkiah',
-              leadTitle: 'Chapter Lead',
               description: 'An international wing of MVOC based in the historic sultanate of Bandar Seri Begawan. Bridging links with Sarawak regional activities and custom modifications clinics.',
               meetupRoutine: 'Monthly evening meets at Jerudong theme park dynamic bays.',
               establishedDate: '08 August 2022',
               registeredCars: ['BG 3320']
+            },
+            {
+              id: 15,
+              name: 'MVOC Putrajaya',
+              region: 'Central',
+              isHQ: false,
+              subText: 'W.P. Putrajaya Chapter',
+              membersCount: 42,
+              iconType: 'building',
+              description: 'Cruising the administrative capital with wide boulevards and scenic bridges.',
+              meetupRoutine: 'Monthly gathering at Dataran Putrajaya.',
+              establishedDate: '10 January 2023',
+              registeredCars: ['PPJ 123', 'PJ 9910']
+            },
+            {
+              id: 16,
+              name: 'MVOC Perlis',
+              region: 'Northern',
+              isHQ: false,
+              subText: 'Perlis Chapter',
+              membersCount: 38,
+              iconType: 'arrow-up',
+              description: 'The northernmost outpost driving across beautiful paddy fields and the Thai border.',
+              meetupRoutine: 'Last Saturday at Kangar waterfront.',
+              establishedDate: '05 March 2023',
+              registeredCars: ['RAL 881', 'RL 3320']
+            },
+            {
+              id: 17,
+              name: 'MVOC Labuan',
+              region: 'East MY',
+              isHQ: false,
+              subText: 'W.P. Labuan Chapter',
+              membersCount: 28,
+              iconType: 'waves',
+              description: 'Our duty-free island chapter, uniting Veloz owners across Labuan.',
+              meetupRoutine: 'First Sunday of each month at Labuan Marina.',
+              establishedDate: '15 June 2023',
+              registeredCars: ['LE 1234', 'LD 992']
             }
           ];
 
@@ -2676,8 +2744,6 @@ function AppContent({
       subText: 'Selangor Chapter',
       membersCount: 452,
       iconType: 'building',
-      leadName: 'Khairul Nizam',
-      leadTitle: 'Chapter Lead',
       description: 'Covering Shah Alam, Subang Jaya, Petaling Jaya, and wider Selangor. Hosts frequent local dynamic cruises and partner garage meets.',
       meetupRoutine: 'Every Friday night at Shah Alam Stadium parking lot.',
       establishedDate: '15 March 2021',
@@ -2691,8 +2757,6 @@ function AppContent({
       subText: 'Federal Territory Chapter',
       membersCount: 312,
       iconType: 'building',
-      leadName: 'Marcus Tan',
-      leadTitle: 'Chapter Lead',
       description: 'The foundation chapter of MVOC. Kuala Lumpur hosts weekly mini-gatherings, technical dyno runs, and charity cruises. We represent the biggest cluster of Velox performance builds in the peninsula.',
       meetupRoutine: 'Every Friday night at KLCC outer bays, starting 09:30 PM.',
       establishedDate: '12 January 2021',
@@ -2706,8 +2770,6 @@ function AppContent({
       subText: 'Johor Chapter',
       membersCount: 288,
       iconType: 'arrow-down',
-      leadName: 'Zainal Abidin',
-      leadTitle: 'Chapter Lead',
       description: 'Uniting southern drivers across Johor Bahru, Muar, and Batu Pahat. Focuses on cross-border dynamic runs, car wash gatherings, and performance setups.',
       meetupRoutine: 'Last Friday night of the month at Danga Bay waterfront.',
       establishedDate: '01 February 2021',
@@ -2721,8 +2783,6 @@ function AppContent({
       subText: 'Penang Chapter',
       membersCount: 195,
       iconType: 'waves',
-      leadName: 'Lee Chong Wai',
-      leadTitle: 'Chapter Lead',
       description: 'Famous for Penang Bridge sunset convoys, hillside winding road cruises, and local culinary noodle run cruises.',
       meetupRoutine: 'Every alternate Sunday evening at Queensbay Mall waterfront.',
       establishedDate: '15 September 2021',
@@ -2736,8 +2796,6 @@ function AppContent({
       subText: 'Perak Chapter',
       membersCount: 167,
       iconType: 'arrow-up',
-      leadName: 'Ahmad Ridzuan',
-      leadTitle: 'Chapter Lead',
       description: 'Encompassing Ipoh, Taiping, and Teluk Intan. Perak chapter cruises historic towns, old trails, and mountain hill roads.',
       meetupRoutine: 'Monthly breakfast meetups in central Ipoh old town bays.',
       establishedDate: '12 November 2021',
@@ -2751,8 +2809,6 @@ function AppContent({
       subText: 'Pahang Chapter',
       membersCount: 142,
       iconType: 'waves',
-      leadName: 'Syed Al-Hafiz',
-      leadTitle: 'Chapter Lead',
       description: 'Embracing the scenic roads of Pahang. Leads long-range highway cruises, beach picnics, and rain driving clinics.',
       meetupRoutine: 'Monthly sunset gathering at Teluk Cempedak beach bays.',
       establishedDate: '10 July 2021',
@@ -2766,8 +2822,6 @@ function AppContent({
       subText: 'Negeri Sembilan Chapter',
       membersCount: 124,
       iconType: 'arrow-down',
-      leadName: 'Norazlan Bakri',
-      leadTitle: 'Chapter Lead',
       description: 'Active chapter in Seremban and surrounding districts. Focused on scenic dynamic test drives and regular local coffee meetups.',
       meetupRoutine: 'Every third Saturday night at Seremban 2 Boulevard.',
       establishedDate: '05 May 2021',
@@ -2781,8 +2835,6 @@ function AppContent({
       subText: 'Melaka Chapter',
       membersCount: 118,
       iconType: 'building',
-      leadName: 'Fadhil Mohd',
-      leadTitle: 'Chapter Lead',
       description: 'Historical city drives, heritage cruises, and regular community social support events for members across Melaka.',
       meetupRoutine: 'First Saturday of each month at Klebang beach.',
       establishedDate: '24 May 2021',
@@ -2796,8 +2848,6 @@ function AppContent({
       subText: 'Kedah Chapter',
       membersCount: 95,
       iconType: 'arrow-up',
-      leadName: 'Baharuddin Hamid',
-      leadTitle: 'Chapter Lead',
       description: 'Connecting Veloz drivers across Alor Setar and Sungai Petani. Highly active support crew network.',
       meetupRoutine: 'Monthly gathering at Alor Setar Tower square.',
       establishedDate: '12 August 2021',
@@ -2811,8 +2861,6 @@ function AppContent({
       subText: 'Kelantan Chapter',
       membersCount: 84,
       iconType: 'waves',
-      leadName: 'Wan Harun',
-      leadTitle: 'Chapter Lead',
       description: 'Tight-knit community of Veloz builders and performance enthusiasts in Kota Bharu.',
       meetupRoutine: 'Bi-weekly Friday afternoon coffee circles.',
       establishedDate: '22 October 2021',
@@ -2826,8 +2874,6 @@ function AppContent({
       subText: 'Terengganu Chapter',
       membersCount: 76,
       iconType: 'waves',
-      leadName: 'Che Ku Daud',
-      leadTitle: 'Chapter Lead',
       description: 'Famous for long east-coast coastal drives. Encompasses Kemaman, Dungun, and Kuala Terengganu.',
       meetupRoutine: 'Monthly beachfront cruise on the coastal expressway.',
       establishedDate: '30 October 2021',
@@ -2841,8 +2887,6 @@ function AppContent({
       subText: 'Sabah Chapter',
       membersCount: 112,
       iconType: 'mountain',
-      leadName: 'Justin Liew',
-      leadTitle: 'Chapter Lead',
       description: 'Exploring scenic high-altitude roads toward Kundasang. Famous for rugged mountain tours and beautiful views of Mount Kinabalu.',
       meetupRoutine: 'First Sunday of each month starting from KK waterfront.',
       establishedDate: '01 June 2022',
@@ -2856,8 +2900,6 @@ function AppContent({
       subText: 'Sarawak Chapter',
       membersCount: 105,
       iconType: 'mountain',
-      leadName: 'Henry Anyi',
-      leadTitle: 'Chapter Lead',
       description: 'Uniting urban commutes with rainforest highway trails. Famous for nature excursions and Sarawak river drives.',
       meetupRoutine: 'Monthly night drive around Kuching Waterfront.',
       establishedDate: '18 March 2022',
@@ -2871,12 +2913,49 @@ function AppContent({
       subText: 'Brunei Chapter',
       membersCount: 65,
       iconType: 'mountain',
-      leadName: 'Haji Faisal',
-      leadTitle: 'Chapter Lead',
       description: 'Connecting Veloz energy across Bandar Seri Begawan and Tutong. Hosting premium scenic highway convoys and cross-border cruises.',
       meetupRoutine: 'First Friday sunset coffee meets at Jerudong Park waterfront.',
       establishedDate: '12 October 2022',
       registeredCars: ['BG 8820', 'KF 129']
+    },
+    {
+      id: 15,
+      name: 'MVOC Putrajaya',
+      region: 'Central',
+      isHQ: false,
+      subText: 'W.P. Putrajaya Chapter',
+      membersCount: 42,
+      iconType: 'building',
+      description: 'Cruising the administrative capital with wide boulevards and scenic bridges.',
+      meetupRoutine: 'Monthly gathering at Dataran Putrajaya.',
+      establishedDate: '10 January 2023',
+      registeredCars: ['PPJ 123', 'PJ 9910']
+    },
+    {
+      id: 16,
+      name: 'MVOC Perlis',
+      region: 'Northern',
+      isHQ: false,
+      subText: 'Perlis Chapter',
+      membersCount: 38,
+      iconType: 'arrow-up',
+      description: 'The northernmost outpost driving across beautiful paddy fields and the Thai border.',
+      meetupRoutine: 'Last Saturday at Kangar waterfront.',
+      establishedDate: '05 March 2023',
+      registeredCars: ['RAL 881', 'RL 3320']
+    },
+    {
+      id: 17,
+      name: 'MVOC Labuan',
+      region: 'East MY',
+      isHQ: false,
+      subText: 'W.P. Labuan Chapter',
+      membersCount: 28,
+      iconType: 'waves',
+      description: 'Our duty-free island chapter, uniting Veloz owners across Labuan.',
+      meetupRoutine: 'First Sunday of each month at Labuan Marina.',
+      establishedDate: '15 June 2023',
+      registeredCars: ['LE 1234', 'LD 992']
     }
   ]);
 
@@ -3160,38 +3239,42 @@ function AppContent({
       };
     }
 
-    const xp = userProfile?.points !== undefined ? userProfile.points : 30;
+    const effectiveData = calculateEffectiveXP(userProfile || {});
+    const xp = effectiveData.effectiveXP;
+    const majorCount = userProfile?.majorEventCount || 0;
     
-    // Determine active tier based on XP
-    let activeTierLabel: 'Bronze' | 'Silver' | 'Gold' = 'Bronze';
+    let activeTierLabel: 'Bronze' | 'Silver' | 'Gold' | 'Platinum' = 'Bronze';
     let currentTierName = 'Bronze Member';
-    
-    if (xp >= 200) {
-      activeTierLabel = 'Gold';
-      currentTierName = 'Gold Member';
-    } else if (xp >= 100) {
-      activeTierLabel = 'Silver';
-      currentTierName = 'Silver Member';
-    }
-    
-    // Calculate progress percentage and next tier goals
     let progressPercent = 0;
-    let nextTierXP = 100;
+    let nextTierXP = 200;
     let benefitsCount = 5;
     
-    if (xp >= 200) {
+    if (xp >= 1500 && majorCount >= 5) {
+      activeTierLabel = 'Platinum';
+      currentTierName = 'Platinum Member';
       progressPercent = 100;
-      nextTierXP = 200;
+      nextTierXP = 1500;
+      benefitsCount = 30;
+    } else if (xp >= 600 && majorCount >= 2) {
+      activeTierLabel = 'Gold';
+      currentTierName = 'Gold Member';
+      // Progress between Gold (600) and Platinum (1500)
+      progressPercent = Math.min(Math.round(66 + ((xp - 600) / 900) * 34), 99);
+      nextTierXP = 1500;
       benefitsCount = 20;
-    } else if (xp >= 100) {
-      // Progress between Silver (100) and Gold (200)
-      progressPercent = Math.min(Math.round(50 + ((xp - 100) / 100) * 50), 100);
-      nextTierXP = 200;
+    } else if (xp >= 200) {
+      activeTierLabel = 'Silver';
+      currentTierName = 'Silver Member';
+      // Progress between Silver (200) and Gold (600)
+      progressPercent = Math.min(Math.round(33 + ((xp - 200) / 400) * 33), 99);
+      nextTierXP = 600;
       benefitsCount = 12;
     } else {
-      // Progress between Bronze (30) and Silver (100)
-      progressPercent = Math.min(Math.round(15 + ((xp - 30) / 70) * (50 - 15)), 50);
-      nextTierXP = 100;
+      activeTierLabel = 'Bronze';
+      currentTierName = 'Bronze Member';
+      // Progress between Bronze (30) and Silver (200)
+      progressPercent = Math.max(0, Math.min(Math.round(((xp - 30) / 170) * 33), 33));
+      nextTierXP = 200;
       benefitsCount = 5;
     }
     
@@ -3201,7 +3284,9 @@ function AppContent({
       currentTierName,
       progressPercent,
       nextTierXP,
-      benefitsCount
+      benefitsCount,
+      majorCount,
+      hasDecayed: effectiveData.hasDecayed
     };
   }, [userProfile]);
 
@@ -4138,7 +4223,7 @@ function AppContent({
                       </div>
                       <div className="border-t border-slate-100 pt-3">
                         <span className="text-slate-400 font-bold block text-[10.5px] uppercase tracking-wide flex items-center gap-1.5">
-                          State Chapter
+                          State Chapter {isEditingProfile && <span className="text-red-500">*</span>}
                         </span>
                         {isEditingProfile ? (
                           <select
@@ -4147,10 +4232,7 @@ function AppContent({
                             className="w-full mt-1 bg-[#f8f9ff] text-slate-800 text-xs font-bold px-3 py-2 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition cursor-pointer"
                           >
                             {[
-                              'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 
-                              'Pahang', 'Perak', 'Perlis', 'Penang', 'Sabah', 
-                              'Sarawak', 'Selangor Chapter', 'Terengganu', 'W.P. Kuala Lumpur', 
-                              'W.P. Labuan', 'W.P. Putrajaya'
+                              'Zone Klang Valley', 'Zone Utara', 'Zone Borneo', 'Zone Pantai Timur', 'Zone Selatan'
                             ].map(state => (
                               <option key={state} value={state}>{state}</option>
                             ))}
@@ -4532,6 +4614,36 @@ function AppContent({
                     <p className="text-[10px] text-slate-400 font-semibold">
                       Last updated: Just now
                     </p>
+                  </div>
+
+                  {/* Supported By Section */}
+                  <div className="mt-8 pt-8 border-t border-slate-200/60 pb-4">
+                    <div className="text-center mb-6">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Supported By</h4>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">Rakan Strategik Rasmi MVOC Malaysia</p>
+                    </div>
+                    
+                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10 opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
+                      <div className="w-24 h-12 flex items-center justify-center">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Toyota_Logo.svg/1024px-Toyota_Logo.svg.png" alt="Toyota" className="max-w-full max-h-full object-contain" />
+                      </div>
+                      <div className="w-24 h-12 flex items-center justify-center">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Michelin_Logo.svg/1024px-Michelin_Logo.svg.png" alt="Michelin" className="max-w-full max-h-full object-contain" />
+                      </div>
+                      <div className="w-24 h-12 flex items-center justify-center">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Petronas_Logo.svg/1024px-Petronas_Logo.svg.png" alt="Petronas" className="max-w-full max-h-full object-contain" />
+                      </div>
+                      <div className="w-24 h-12 flex items-center justify-center">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mobil_1_logo.svg/1024px-Mobil_1_logo.svg.png" alt="Mobil 1" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-6 text-center">
+                      <a href="/partner" className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
+                        Sertai Kami Sebagai Penaja
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -5682,10 +5794,21 @@ function AppContent({
                   {/* Veloz Tier & Rewards (Gamification) */}
                   <div className="bg-white p-5 rounded-3xl border border-slate-200/50 shadow-xs text-left space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-black text-[#0F2D52] uppercase tracking-wider">Veloz Tier & Rewards</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-[#0F2D52] uppercase tracking-wider">Veloz Tier & Rewards</span>
+                        <button 
+                          onClick={() => setIsTierModalOpen(true)}
+                          className="p-1 -ml-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          aria-label="Info Mata Ganjaran"
+                        >
+                          <Info className="w-[14px] h-[14px]" />
+                        </button>
+                      </div>
                       <span className={`text-[10px] font-bold border px-2.5 py-0.5 rounded-full uppercase ${
                         rewardsInfo.activeTierLabel === 'LOCKED'
                           ? 'bg-slate-100 text-slate-400 border-slate-200'
+                          : rewardsInfo.activeTierLabel === 'Platinum'
+                          ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm shadow-purple-100/50'
                           : rewardsInfo.activeTierLabel === 'Gold' 
                           ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm shadow-amber-100/50'
                           : rewardsInfo.activeTierLabel === 'Silver'
@@ -5698,9 +5821,10 @@ function AppContent({
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                        <span className={rewardsInfo.activeTierLabel === 'Bronze' ? "text-[#0F2D52] font-black" : ""}>Bronze {rewardsInfo.activeTierLabel === 'Bronze' ? '(Active)' : ''}</span>
-                        <span className={rewardsInfo.activeTierLabel === 'Silver' ? "text-[#0F2D52] font-black" : ""}>Silver {rewardsInfo.activeTierLabel === 'Silver' ? '(Active)' : ''}</span>
-                        <span className={rewardsInfo.activeTierLabel === 'Gold' ? "text-[#0F2D52] font-black" : ""}>Gold {rewardsInfo.activeTierLabel === 'Gold' ? '(Active)' : ''}</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Bronze' ? "text-[#0F2D52] font-black" : ""}>Bronze</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Silver' ? "text-[#0F2D52] font-black" : ""}>Silver</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Gold' ? "text-[#0F2D52] font-black" : ""}>Gold</span>
+                        <span className={rewardsInfo.activeTierLabel === 'Platinum' ? "text-[#0F2D52] font-black" : ""}>Platinum</span>
                       </div>
                       
                       {/* Horizontal Progress Bar */}
@@ -5709,6 +5833,8 @@ function AppContent({
                           className={`h-full bg-gradient-to-r ${
                             rewardsInfo.activeTierLabel === 'LOCKED'
                               ? 'from-slate-300 to-slate-300'
+                              : rewardsInfo.activeTierLabel === 'Platinum'
+                              ? 'from-purple-500 via-purple-400 to-purple-600 shadow-[0px_0px_6px_rgba(168,85,247,0.5)]'
                               : rewardsInfo.activeTierLabel === 'Gold'
                               ? 'from-amber-500 via-yellow-400 to-amber-600 shadow-[0px_0px_6px_rgba(245,158,11,0.5)]'
                               : rewardsInfo.activeTierLabel === 'Silver'
@@ -5719,16 +5845,39 @@ function AppContent({
                         />
                       </div>
                       
-                      <div className="flex justify-between items-center text-[10.5px] font-semibold text-slate-400">
-                        <span>Reward Points: {rewardsInfo.xp} / 200 XP</span>
-                        <span>Benefits: {rewardsInfo.benefitsCount}/20</span>
-                        <span>
-                          {rewardsInfo.activeTierLabel === 'LOCKED'
-                            ? 'Compliance Required'
-                            : rewardsInfo.xp >= 200 
-                              ? 'Gold Tier Active' 
-                              : `Next Tier: ${rewardsInfo.nextTierXP} XP`}
-                        </span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center text-[10.5px] font-semibold text-slate-400">
+                          <span>Reward Points: {rewardsInfo.xp} / {rewardsInfo.activeTierLabel === 'Platinum' ? 'Max' : rewardsInfo.nextTierXP} XP</span>
+                          <span>
+                            {rewardsInfo.activeTierLabel === 'LOCKED'
+                              ? 'Compliance Required'
+                              : rewardsInfo.activeTierLabel === 'Platinum' 
+                                ? 'Tahap Maksimum (Max Tier)' 
+                                : `Next Tier: ${rewardsInfo.nextTierXP} XP`}
+                          </span>
+                        </div>
+                        
+                        {/* Prerequisites Warning */}
+                        {rewardsInfo.activeTierLabel !== 'Platinum' && rewardsInfo.activeTierLabel !== 'LOCKED' && (
+                          <div className="mt-1 text-[9.5px] text-slate-500 font-medium">
+                            <span className="font-bold text-slate-700">Syarat Naik Tahap: </span>
+                            {rewardsInfo.activeTierLabel === 'Bronze' && "Capai 200 XP."}
+                            {rewardsInfo.activeTierLabel === 'Silver' && "Capai 600 XP & 2 Kehadiran Acara Utama (Major)."}
+                            {rewardsInfo.activeTierLabel === 'Gold' && "Capai 1,500 XP & 5 Kehadiran Acara Utama (Major)."}
+                          </div>
+                        )}
+
+                        {/* Encouraging Text */}
+                        {rewardsInfo.activeTierLabel !== 'Platinum' && rewardsInfo.activeTierLabel !== 'LOCKED' && (
+                          <div className="mt-1.5 p-2 bg-blue-50 border border-blue-100 rounded-lg">
+                            <p className="text-[10px] text-blue-700 font-semibold italic text-center">
+                              "Sedikit lagi untuk ke tahap {
+                                rewardsInfo.activeTierLabel === 'Bronze' ? 'Silver' :
+                                rewardsInfo.activeTierLabel === 'Silver' ? 'Gold' : 'Platinum'
+                              }! Jom sertai acara akan datang untuk kumpul lebih banyak XP."
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -7767,6 +7916,7 @@ function AppContent({
                     setChapterLeadChatMessage={setChapterLeadChatMessage}
                     userProfile={userProfile}
                     isSuperAdmin={isSuperAdmin}
+                    membersList={membersList}
                   />
                 </motion.div>
               )}
@@ -7783,6 +7933,7 @@ function AppContent({
                     isAdmin={isAdminOrSuperAdmin()}
                     currentUserRole={displayRole}
                     currentUserId={auth.currentUser?.uid || userProfile?.uid}
+                    appConfig={appConfig}
                   />
                 </motion.div>
               )}
@@ -8302,6 +8453,26 @@ function AppContent({
                   currentUserRole={displayRole}
                   isMasterAdmin={isMasterAdmin}
                   eventsList={events}
+                  appConfig={appConfig}
+                  onToggleModule={handleToggleNavModule}
+                  chaptersList={chaptersList}
+                />
+              )}
+
+              {/* TAB ADMIN: SUPER ADMIN PANEL */}
+              {currentTab === 'super_admin' && (isMasterAdmin || displayRole === 'super_admin') && (
+                <SuperAdminDashboard
+                  appConfig={appConfig}
+                  eventsList={events}
+                  membersList={membersList}
+                  triggerToast={triggerToast}
+                  fetchFirestoreUsers={fetchFirestoreUsers}
+                  onToggleModule={handleToggleNavModule}
+                  isAuditingRewards={isAuditingRewards}
+                  handleRunRewardsAudit={handleRunRewardsAudit}
+                  isMasterAdmin={isMasterAdmin}
+                  currentUserRole={displayRole}
+                  navigateToTab={(tab) => navigateToTab(tab as TabType)}
                 />
               )}
 
@@ -9416,6 +9587,18 @@ function AppContent({
                           <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
                           Admin Council
                         </span>
+
+                        {(isMasterAdmin || displayRole === 'super_admin') && (
+                          <button
+                            onClick={() => navigateToTab('super_admin')}
+                            className={`relative z-20 pointer-events-auto cursor-pointer w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition ${
+                              currentTab === 'super_admin' ? 'bg-[#0F2D52] text-white border-l-4 border-amber-400 shadow-md' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            <ShieldCheck className="w-4 h-4 shrink-0 text-amber-500" />
+                            <span>Super Admin Panel</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => navigateToTab('users')}
@@ -10789,6 +10972,92 @@ function AppContent({
                     />
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Tier & Rewards Info Modal */}
+      <AnimatePresence>
+        {isTierModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-6">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTierModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden relative z-10 flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900">Cara Pengumpulan Mata</h3>
+                </div>
+                <button 
+                  onClick={() => setIsTierModalOpen(false)}
+                  className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-5 overflow-y-auto custom-scrollbar">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">Cara Kumpul Mata (XP)</h4>
+                    <ul className="space-y-2 text-sm text-slate-600">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold mt-0.5">•</span>
+                        <span>Hadir Event: <strong className="text-slate-800">10 XP</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold mt-0.5">•</span>
+                        <span>Event Utama (Major): <strong className="text-slate-800">50 XP</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold mt-0.5">•</span>
+                        <span>Sukarelawan: <strong className="text-slate-800">100 XP</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold mt-0.5">•</span>
+                        <span>Referral Ahli Baru: <strong className="text-slate-800">30 XP</strong></span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-100/50">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-xs font-bold text-blue-900">Nota Penting</h4>
+                        <p className="text-[11px] text-blue-800/80 mt-1">Mata akan diselaraskan (decay) jika tiada aktiviti direkodkan melebihi 90 hari untuk mengekalkan kualiti tier keahlian.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <a 
+                  href="/faq" 
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#0F2D52] hover:bg-[#1a3f6e] text-white text-sm font-bold rounded-xl transition-colors"
+                >
+                  Lihat FAQ Penuh
+                  <ArrowRight className="w-4 h-4" />
+                </a>
               </div>
             </motion.div>
           </div>

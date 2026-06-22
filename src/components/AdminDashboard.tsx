@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   ShieldCheck, 
   Trash2, 
@@ -55,6 +55,8 @@ interface AdminDashboardProps {
   currentUserRole?: string;
   isMasterAdmin?: boolean;
   eventsList?: any[];
+  appConfig?: any;
+  onToggleModule?: any;
 }
 
 export default function AdminDashboard({
@@ -79,7 +81,7 @@ export default function AdminDashboard({
   eventsList = []
 }: AdminDashboardProps) {
 
-  const isCurrentUserMasterAdmin = isMasterAdmin || displayEmail.toLowerCase() === MASTER_EMAIL;
+  const isCurrentUserMasterAdmin = isMasterAdmin || currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL;
 
   // Helper method for authorization
   const isAdminOrSuperAdmin = () => {
@@ -122,7 +124,7 @@ export default function AdminDashboard({
     user: SyncedUserProfile | null;
     status: 'active' | 'suspended' | 'banned' | 'pending' | 'deleted' | 'delete_requested';
     role: 'super_admin' | 'admin' | 'member';
-    managedChapter: string;
+    managedChapters: string[];
     name: string;
     shortName: string;
     mvocId: string;
@@ -138,7 +140,7 @@ export default function AdminDashboard({
     user: null,
     status: 'active',
     role: 'member',
-    managedChapter: '',
+    managedChapters: [],
     name: '',
     shortName: '',
     mvocId: '',
@@ -148,65 +150,17 @@ export default function AdminDashboard({
     gender: '',
     joinDate: '',
     points: '',
-    chapter: ''
+    chapter: 'Selangor Chapter'
   });
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newMvocDigits, setNewMvocDigits] = useState('');
-  const [newChapter, setNewChapter] = useState('Selangor Chapter');
+  const [newChapter, setNewChapter] = useState('Zone Klang Valley');
   const [newTier, setNewTier] = useState<'GOLD' | 'STANDARD'>('STANDARD');
   const [newRole, setNewRole] = useState<'super_admin' | 'admin' | 'member'>('member');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'analytics'>('directory');
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  // States and list calculation for voluntary account deletion requests
-  const [isDeleteRequestsModalOpen, setIsDeleteRequestsModalOpen] = useState(false);
-  const [processingDeleteUid, setProcessingDeleteUid] = useState<string | null>(null);
-
-  const [confirmDeleteUser, setConfirmDeleteUser] = useState<SyncedUserProfile | null>(null);
-  const [confirmRejectUser, setConfirmRejectUser] = useState<SyncedUserProfile | null>(null);
-  const [showForceSyncConfirm, setShowForceSyncConfirm] = useState(false);
-
-  const deleteRequests = membersList.filter(u => u.requestDelete === true || u.status === 'delete_requested');
-
-  const handleApproveDeleteRequest = async (targetUser: SyncedUserProfile) => {
-    setProcessingDeleteUid(targetUser.uid);
-    try {
-      await updateDoc(doc(db, 'users', targetUser.uid), {
-        status: 'deleted',
-        requestDelete: false
-      });
-      try {
-        await deleteDoc(doc(db, 'Admin', targetUser.uid));
-      } catch (err) {}
-      
-      triggerToast(`Akaun ${targetUser.name} telah berjaya ditukar status kepada 'Deleted'.`, 'success');
-      await fetchFirestoreUsers();
-      setConfirmDeleteUser(null);
-    } catch (err: any) {
-      triggerToast(`Gagal mengemaskini status pemadaman: ${err.message || String(err)}`, 'error');
-    } finally {
-      setProcessingDeleteUid(null);
-    }
-  };
-
-  const handleRejectDeleteRequest = async (targetUser: SyncedUserProfile) => {
-    setProcessingDeleteUid(targetUser.uid);
-    try {
-      await updateDoc(doc(db, 'users', targetUser.uid), {
-        requestDelete: false,
-        status: 'active'
-      });
-      triggerToast(`Permohonan pemadaman akaun ${targetUser.name} telah ditolak.`, 'success');
-      await fetchFirestoreUsers();
-      setConfirmRejectUser(null);
-    } catch (err: any) {
-      triggerToast(`Gagal menolak permohonan: ${err.message || String(err)}`, 'error');
-    } finally {
-      setProcessingDeleteUid(null);
-    }
-  };
 
   const handleForceSync = async () => {
     setIsSyncingAll(true);
@@ -214,7 +168,6 @@ export default function AdminDashboard({
       const count = await forceSyncAllUsers(db);
       triggerToast(`Successfully synced ${count} users!`, 'success');
       await fetchFirestoreUsers();
-      setShowForceSyncConfirm(false);
     } catch (err: any) {
       triggerToast(`Sync failed: ${err.message}`, 'error');
     } finally {
@@ -321,11 +274,21 @@ export default function AdminDashboard({
   const memberList = filteredUsers.filter(u => u.role === 'member' || (!['super_admin', 'admin'].includes(u.role)));
 
   const currentAdminUser = membersList.find(u => u.email.toLowerCase() === displayEmail.toLowerCase());
-  const currentAdminChapter = currentAdminUser?.managedChapter || currentAdminUser?.chapter || '';
+  
+  const currentAdminChapters: string[] = useMemo(() => {
+    if (!currentAdminUser) return [];
+    if (Array.isArray(currentAdminUser.managedChapter)) {
+      return currentAdminUser.managedChapter;
+    }
+    if (currentAdminUser.managedChapter) {
+      return [currentAdminUser.managedChapter];
+    }
+    return currentAdminUser.chapter ? [currentAdminUser.chapter] : [];
+  }, [currentAdminUser]);
   
   const pendingMembersList = membersList.filter(u => 
     u.status === 'pending' && 
-    (currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL || u.chapter === currentAdminChapter)
+    (currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL || currentAdminChapters.includes(u.chapter))
   );
 
   // Handle adding new member explicitly to Firestore and local state
@@ -364,7 +327,7 @@ export default function AdminDashboard({
       setNewName('');
       setNewEmail('');
       setNewMvocDigits('');
-      setNewChapter('Selangor Chapter');
+      setNewChapter('Zone Klang Valley');
       setNewTier('STANDARD');
       setNewRole('member');
       setIsAddModalOpen(false);
@@ -389,8 +352,21 @@ export default function AdminDashboard({
 
       const updates: any = {
         status: manageUserModalState.status,
-        role: manageUserModalState.role,
       };
+
+      let pendingRoleUpgrade = false;
+
+      if (!isCurrentUserMasterAdmin && manageUserModalState.role !== targetUser.role && (manageUserModalState.role === 'admin' || manageUserModalState.role === 'super_admin')) {
+        pendingRoleUpgrade = true;
+        updates.roleRequest = {
+          role: manageUserModalState.role,
+          requestedBy: displayEmail,
+          requestedAt: new Date().toISOString()
+        };
+      } else {
+        updates.role = manageUserModalState.role;
+        updates.roleRequest = null;
+      }
 
       if (currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL) {
         if (manageUserModalState.name) updates.name = manageUserModalState.name;
@@ -405,10 +381,12 @@ export default function AdminDashboard({
         if (manageUserModalState.chapter !== undefined) updates.chapter = manageUserModalState.chapter;
       }
 
-      let oldChapterName = targetUser.managedChapter;
+      const oldChapters: string[] = Array.isArray(targetUser.managedChapter)
+        ? targetUser.managedChapter
+        : (targetUser.managedChapter ? [targetUser.managedChapter] : []);
 
       if (manageUserModalState.role === 'admin') {
-        updates.managedChapter = manageUserModalState.managedChapter;
+        updates.managedChapter = manageUserModalState.managedChapters;
       } else {
         updates.managedChapter = null; // Remove managed_chapter if demoted
       }
@@ -417,46 +395,62 @@ export default function AdminDashboard({
       batch.update(userRef, updates);
 
       // Automated Database Sorting logic
-      if (manageUserModalState.role === 'admin' || manageUserModalState.role === 'super_admin') {
-        batch.set(adminRef, {
-          email: targetUser.email,
-          name: updates.name || targetUser.name,
-          mvocId: updates.mvocId || targetUser.mvocId,
-          role: manageUserModalState.role,
-          managedChapter: updates.managedChapter || null,
-          accessLevel: 'Full Access'
-        }, { merge: true });
-      } else {
-        // Only delete if they are not the Master Admin
-        if (targetUser.mvocId !== MASTER_ADMIN_ID && targetUser.email.toLowerCase() !== MASTER_EMAIL) {
-          batch.delete(adminRef);
+      if (!pendingRoleUpgrade) {
+        if (manageUserModalState.role === 'admin' || manageUserModalState.role === 'super_admin') {
+          batch.set(adminRef, {
+            email: targetUser.email,
+            name: updates.name || targetUser.name,
+            mvocId: updates.mvocId || targetUser.mvocId,
+            role: manageUserModalState.role,
+            managedChapter: updates.managedChapter || null,
+            accessLevel: 'Full Access'
+          }, { merge: true });
+        } else {
+          // Only delete if they are not the Master Admin
+          if (targetUser.mvocId !== MASTER_ADMIN_ID && targetUser.email.toLowerCase() !== MASTER_EMAIL) {
+            batch.delete(adminRef);
+          }
         }
       }
 
       // Chapter sync logic
       if (chaptersList && chaptersList.length > 0) {
-        // Demotion / Changing managed chapter - first clear previous chapter
-        if (oldChapterName && oldChapterName !== updates.managedChapter) {
-          const oldChapter = chaptersList.find(c => c.name === oldChapterName);
-          if (oldChapter) {
-             const chapRef = doc(db, 'chapters', String(oldChapter.id));
-             batch.update(chapRef, { adminId: '' });
+        const newChapters = manageUserModalState.role === 'admin' ? manageUserModalState.managedChapters : [];
+
+        // Helper to find chapter safely by checking both name and subText
+        const findChapterByName = (chapName: string) => {
+          return chaptersList.find(c => {
+            const search = chapName.toLowerCase().replace('w.p.', '').trim();
+            return (c.name && c.name.toLowerCase().includes(search)) || 
+                   (c.subText && c.subText.toLowerCase().includes(search));
+          });
+        };
+
+        // 1. Clear adminId for chapters that were managed but are no longer managed
+        const removedChapters = oldChapters.filter(ch => !newChapters.includes(ch));
+        for (const chapName of removedChapters) {
+          const chObj = findChapterByName(chapName);
+          if (chObj) {
+            const chapRef = doc(db, 'chapters', String(chObj.id));
+            batch.update(chapRef, { adminId: '', leadName: '' });
           }
         }
 
-        // New chapter
-        if (updates.managedChapter) {
-          const newChapterObj = chaptersList.find(c => c.name === updates.managedChapter);
-          if (newChapterObj) {
-            const chapRef = doc(db, 'chapters', String(newChapterObj.id));
-            batch.update(chapRef, { adminId: targetUser.uid });
+        // 2. Set adminId and leadName for ALL currently managed chapters (to force sync any missing data)
+        for (const chapName of newChapters) {
+          const chObj = findChapterByName(chapName);
+          if (chObj) {
+            const chapRef = doc(db, 'chapters', String(chObj.id));
+            batch.update(chapRef, { adminId: targetUser.uid, leadName: updates.name || targetUser.name });
           }
         }
       }
 
       await batch.commit();
 
-      if (manageUserModalState.role === 'admin' || manageUserModalState.role === 'super_admin') {
+      if (pendingRoleUpgrade) {
+        triggerToast('Permohonan menaik taraf dihantar kepada Master Admin untuk kelulusan.', 'info');
+      } else if (manageUserModalState.role === 'admin' || manageUserModalState.role === 'super_admin') {
         triggerToast('User promoted! Database organized automatically.', 'success');
       } else {
         triggerToast(`Successfully updated user ${targetUser.name}!`, 'success');
@@ -514,13 +508,15 @@ export default function AdminDashboard({
                           <button 
                             type="button"
                             onClick={() => {
-                              if (currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL) {
+                              if (currentUserRole === 'super_admin' || displayEmail.toLowerCase() === MASTER_EMAIL || currentUserRole === 'admin') {
                                 setManageUserModalState({
                                   isOpen: true,
                                   user: u,
                                   status: u.status || 'active',
                                   role: u.role || 'member',
-                                  managedChapter: u.managedChapter || '',
+                                  managedChapters: Array.isArray(u.managedChapter) 
+                                    ? u.managedChapter 
+                                    : (u.managedChapter ? [u.managedChapter] : []),
                                   name: u.name || '',
                                   shortName: u.shortName || '',
                                   mvocId: u.mvocId || '',
@@ -530,7 +526,7 @@ export default function AdminDashboard({
                                   gender: (u as any).gender || '',
                                   joinDate: u.joinDate || '12 January 2021',
                                   points: u.points?.toString() || '30',
-                                  chapter: u.chapter || 'Selangor Chapter'
+                                  chapter: u.chapter || 'Zone Klang Valley'
                                 });
                               }
                             }}
@@ -566,13 +562,35 @@ export default function AdminDashboard({
                         <div className="flex items-center gap-2">
                           {!isRowMasterAdmin ? (
                             <>
-                              <span className="text-[10px] font-bold uppercase text-slate-700 tracking-wider">
-                                {u.role === 'super_admin' ? '⚡ SUPER ADMIN' : u.role === 'admin' ? '👮 OFFICER' : '👤 MEMBER'}
-                              </span>
+                              <div className="flex flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const roles: ('member' | 'admin' | 'super_admin')[] = ['member', 'admin', 'super_admin'];
+                                    const currentIdx = roles.indexOf(u.role || 'member');
+                                    const nextRole = roles[(currentIdx + 1) % roles.length];
+                                    setPendingUpdate({
+                                      user: u,
+                                      type: 'role',
+                                      value: nextRole
+                                    });
+                                  }}
+                                  disabled={(isSelf && u.role === 'super_admin') || (!isCurrentUserMasterAdmin && (u.role === 'super_admin' || u.role === 'admin'))}
+                                  className="text-[10px] font-bold uppercase text-slate-700 tracking-wider text-left hover:text-[#0f2d52] hover:bg-slate-100 p-1 -ml-1 rounded transition disabled:opacity-80 disabled:pointer-events-none"
+                                  title="Tukar status/jawatan (Click to change role)"
+                                >
+                                  {u.role === 'super_admin' ? '⚡ SUPER ADMIN' : u.role === 'admin' ? '👮 OFFICER' : '👤 MEMBER'}
+                                </button>
+                                {u.roleRequest && (
+                                  <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0 w-fit">
+                                    PENDING {u.roleRequest.role === 'super_admin' ? 'SUPER ADMIN' : 'OFFICER'}
+                                  </span>
+                                )}
+                              </div>
 
                               <button
                                 type="button"
-                                disabled={isSelf}
+                                disabled={isSelf || (!isCurrentUserMasterAdmin && (u.role === 'super_admin' || u.role === 'admin'))}
                                 onClick={() => {
                                   setPendingDeleteUser(u);
                                   setDeleteConfirmText('');
@@ -735,106 +753,12 @@ export default function AdminDashboard({
         )}
       </section>
 
-      {/* ADMIN TABS & TOOLS */}
-      <section className="flex flex-wrap items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setActiveAdminTab('directory')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-              activeAdminTab === 'directory' 
-                ? 'bg-[#0f2d52] text-white' 
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            Control Directory
-          </button>
-          <button
-            onClick={() => setActiveAdminTab('analytics')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-              activeAdminTab === 'analytics' 
-                ? 'bg-[#0f2d52] text-white' 
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Chapter Analytics
-          </button>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => {
-              console.log('Event Scanner Tool Button clicked!');
-              setIsScannerOpen(true);
-            }}
-            className="relative z-[9999] pointer-events-auto bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm cursor-pointer"
-            style={{ cursor: 'pointer' }}
-          >
-            <QrCode className="w-4 h-4" />
-            Event Scanner Tool
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsDeleteRequestsModalOpen(true)}
-            className={`relative z-[9999] pointer-events-auto border rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm cursor-pointer ${
-              deleteRequests.length > 0
-                ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-600 hover:text-white animate-pulse'
-                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Rekues Padam</span>
-            {deleteRequests.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-extrabold text-[9px] w-5 h-5 rounded-full flex items-center justify-center animate-bounce shadow-md">
-                {deleteRequests.length}
-              </span>
-            )}
-          </button>
-
-          <a
-            href="https://docs.google.com/spreadsheets/d/1ZrZaf26p60i_n7ocJVp_yAw4xadNrjXodChaUWTrnmY/edit?usp=sharing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative z-[9999] pointer-events-auto bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm cursor-pointer decoration-none"
-            style={{ cursor: 'pointer' }}
-          >
-            <ExternalLink className="w-4 h-4" />
-            <span>Google Sheet</span>
-          </a>
-
-          {handleRunRewardsAudit && (
-            <button
-              type="button"
-              onClick={handleRunRewardsAudit}
-              disabled={isAuditingRewards}
-              className="relative z-[9999] pointer-events-auto bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-              style={{ cursor: 'pointer' }}
-            >
-              {isAuditingRewards ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="w-4 h-4" />
-              )}
-              <span>Audit Rewards (XP)</span>
-            </button>
-          )}
-        </div>
-      </section>
-
-      {isScannerOpen && (
-        <QREventScanner 
-          events={eventsList}
-          onClose={() => setIsScannerOpen(false)}
-          triggerToast={triggerToast}
-        />
-      )}
 
       {activeAdminTab === 'analytics' ? (
         <ChapterAnalytics 
           members={membersList} 
-          chapter={currentAdminChapter || 'Selangor Chapter'} 
+          chapter={currentAdminChapters} 
         />
       ) : (
         <>
@@ -896,7 +820,7 @@ export default function AdminDashboard({
                 Pending Members Queue
               </h3>
               <p className="text-xs font-medium text-amber-700">
-                Review and approve new member registrations for <strong>{currentAdminChapter || 'All Chapters'}</strong>.
+                Review and approve new member registrations for <strong>{currentAdminChapters.join(', ') || 'All Chapters'}</strong>.
               </p>
             </div>
           </div>
@@ -1446,10 +1370,7 @@ export default function AdminDashboard({
                           className="w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition text-[#0b1c30] cursor-pointer"
                         >
                           {[
-                            'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 
-                            'Pahang', 'Perak', 'Perlis', 'Penang', 'Sabah', 
-                            'Sarawak', 'Selangor Chapter', 'Terengganu', 'W.P. Kuala Lumpur', 
-                            'W.P. Labuan', 'W.P. Putrajaya'
+                            'Zone Klang Valley', 'Zone Utara', 'Zone Borneo', 'Zone Pantai Timur', 'Zone Selatan'
                           ].map(state => (
                             <option key={state} value={state}>{state}</option>
                           ))}
@@ -1484,29 +1405,43 @@ export default function AdminDashboard({
                         </select>
                       </div>
 
-                      {/* Managed State Chapter */}
+                      {/* Managed State Chapters */}
                       {manageUserModalState.role === 'admin' && (
-                        <div className="space-y-1.5 md:col-span-2 pt-2 border-t border-slate-100">
+                        <div className="space-y-2 md:col-span-2 pt-2 border-t border-slate-100">
                           <label className="block text-[10px] font-extrabold text-[#455f87] uppercase tracking-widest flex items-center gap-1.5">
                             <Map className="w-3.5 h-3.5 text-blue-500" />
-                            Managed State Chapter
+                            Managed State Chapters
                           </label>
-                          <select
-                            value={manageUserModalState.managedChapter}
-                            onChange={(e) => setManageUserModalState(prev => ({ ...prev, managedChapter: e.target.value }))}
-                            className="w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-[#0b1c30] cursor-pointer"
-                          >
-                            <option value="">-- Remove/None --</option>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-[#f8f9ff] border border-[#c4c6cf]/55 rounded-xl p-3.5 max-h-48 overflow-y-auto">
                             {[
                               'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 
                               'Pahang', 'Perak', 'Perlis', 'Penang', 'Sabah', 
                               'Sarawak', 'Selangor', 'Terengganu', 'W.P. Kuala Lumpur', 
-                              'W.P. Labuan', 'W.P. Putrajaya'
-                            ].map(state => (
-                              <option key={state} value={state}>{state}</option>
-                            ))}
-                          </select>
-                          <p className="text-[10px] text-slate-400 font-medium">Allows managing members and details for this specific chapter.</p>
+                              'W.P. Labuan', 'W.P. Putrajaya', 'Brunei'
+                            ].map(state => {
+                              const isChecked = manageUserModalState.managedChapters.includes(state);
+                              return (
+                                <label key={state} className="flex items-center gap-2 text-xs font-bold text-[#0b1c30] cursor-pointer hover:bg-slate-200/50 p-1.5 rounded transition">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setManageUserModalState(prev => {
+                                        const chapters = checked
+                                          ? [...prev.managedChapters, state]
+                                          : prev.managedChapters.filter(ch => ch !== state);
+                                        return { ...prev, managedChapters: chapters };
+                                      });
+                                    }}
+                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-350"
+                                  />
+                                  <span>{state}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium">Select all state chapters this admin can manage as a leader.</p>
                         </div>
                       )}
                     </div>
@@ -1524,7 +1459,9 @@ export default function AdminDashboard({
                         <select
                           value={manageUserModalState.status}
                           onChange={(e) => setManageUserModalState(prev => ({ ...prev, status: e.target.value as any }))}
-                          className="w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition text-[#0b1c30] cursor-pointer"
+                          disabled={manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin'}
+                          title={(manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin') ? "You cannot modify the status of another Admin/Super Admin." : ""}
+                          className={`w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition text-[#0b1c30] ${(manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           <option value="active">Active</option>
                           <option value="suspended">Suspended</option>
@@ -1537,36 +1474,54 @@ export default function AdminDashboard({
                         <select
                           value={manageUserModalState.role}
                           onChange={(e) => setManageUserModalState(prev => ({ ...prev, role: e.target.value as any }))}
-                          className="w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition text-[#0b1c30] cursor-pointer"
+                          disabled={manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin'}
+                          title={(manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin') ? "You cannot modify the role of another Admin/Super Admin." : ""}
+                          className={`w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-[#0f2d52] focus:ring-1 focus:ring-[#0f2d52] transition text-[#0b1c30] ${(manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           <option value="member">MEMBER</option>
                           <option value="admin">OFFICER / ADMIN</option>
-                          <option value="super_admin">SUPER ADMIN</option>
                         </select>
                       </div>
 
+                      {/* Managed State Chapters */}
                       {manageUserModalState.role === 'admin' && (
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                        <div className="space-y-2 pt-2 border-t border-slate-100">
                           <label className="block text-[10px] font-extrabold text-[#455f87] uppercase tracking-widest flex items-center gap-1.5">
                             <Map className="w-3.5 h-3.5 text-blue-500" />
-                            Managed State Chapter
+                            Managed State Chapters
                           </label>
-                          <select
-                            value={manageUserModalState.managedChapter}
-                            onChange={(e) => setManageUserModalState(prev => ({ ...prev, managedChapter: e.target.value }))}
-                            className="w-full bg-[#f8f9ff] text-xs font-bold px-4 py-3 border border-[#c4c6cf]/55 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-[#0b1c30] cursor-pointer"
-                          >
-                            <option value="">-- Remove/None --</option>
+                          <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 bg-[#f8f9ff] border border-[#c4c6cf]/55 rounded-xl p-3.5 max-h-48 overflow-y-auto ${(manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin') ? 'opacity-50 cursor-not-allowed' : ''}`}>
                             {[
                               'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 
                               'Pahang', 'Perak', 'Perlis', 'Penang', 'Sabah', 
                               'Sarawak', 'Selangor', 'Terengganu', 'W.P. Kuala Lumpur', 
-                              'W.P. Labuan', 'W.P. Putrajaya'
-                            ].map(state => (
-                              <option key={state} value={state}>{state}</option>
-                            ))}
-                          </select>
-                          <p className="text-[10px] text-slate-400 font-medium">Allows managing members and details for this specific chapter.</p>
+                              'W.P. Labuan', 'W.P. Putrajaya', 'Brunei'
+                            ].map(state => {
+                              const isChecked = manageUserModalState.managedChapters.includes(state);
+                              const isDisabled = manageUserModalState.user.role === 'admin' || manageUserModalState.user.role === 'super_admin';
+                              return (
+                                <label key={state} className={`flex items-center gap-2 text-xs font-bold text-[#0b1c30] p-1.5 rounded transition ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200/50'}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={isDisabled}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setManageUserModalState(prev => {
+                                        const chapters = checked
+                                          ? [...prev.managedChapters, state]
+                                          : prev.managedChapters.filter(ch => ch !== state);
+                                        return { ...prev, managedChapters: chapters };
+                                      });
+                                    }}
+                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-350 disabled:opacity-50"
+                                  />
+                                  <span>{state}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium">Select all state chapters this admin can manage as a leader.</p>
                         </div>
                       )}
                     </div>
@@ -1735,205 +1690,6 @@ export default function AdminDashboard({
                 </div>
 
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* VOLUNTARY DELETE REQUESTS AUDITING MODAL */}
-      <AnimatePresence>
-        {isDeleteRequestsModalOpen && (
-          <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-[95vw] md:w-[500px] bg-[#0b1c30] text-white rounded-2xl border border-red-500/20 shadow-2xl p-5 md:p-6 z-10 flex flex-col gap-4 text-left select-none overflow-hidden font-sans"
-            >
-              <div className="flex justify-between items-center pb-2.5 border-b border-white/10">
-                <div className="flex items-center gap-2 text-red-500">
-                  <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse shrink-0" />
-                  <h4 className="text-sm font-black uppercase tracking-wide">Permohonan Hapus Akaun ({deleteRequests.length})</h4>
-                </div>
-                <button 
-                  onClick={() => setIsDeleteRequestsModalOpen(false)}
-                  className="p-1 px-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white cursor-pointer hover:scale-105 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed font-semibold">
-                Berikut adalah senarai ahli yang telah menghantar permohonan pemadaman akaun secara sukarela. Super Admin boleh meluluskan untuk memadam secara kekal atau menolak permohonan tersebut.
-              </p>
-
-              {/* Google Sheets Hotlink */}
-              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs">
-                <div className="space-y-1">
-                  <span className="font-extrabold block text-white text-[10px] uppercase tracking-wider">Manual Delete (Google Sheet)</span>
-                  <p className="text-[10px] leading-relaxed text-slate-300">
-                    Sila padam maklumat atau baris berkaitan pengguna tersebut secara manual di dalam Google Sheet MVOC utama.
-                  </p>
-                </div>
-                <a
-                  href="https://docs.google.com/spreadsheets/d/1ZrZaf26p60i_n7ocJVp_yAw4xadNrjXodChaUWTrnmY/edit?usp=sharing"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] rounded-lg uppercase tracking-wider transition shrink-0 flex items-center gap-1 hover:scale-105 active:scale-95 cursor-pointer decoration-none"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  <span>Buka Sheet</span>
-                </a>
-              </div>
-
-              <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent relative">
-                {deleteRequests.length === 0 ? (
-                  <div className="text-center py-8 bg-[#091524] rounded-xl border border-white/5">
-                    <p className="text-xs text-slate-400 font-extrabold uppercase tracking-wider">Tiada Permohonan Aktif</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Semua permohonan pemadaman telah diselesaikan.</p>
-                  </div>
-                ) : (
-                  deleteRequests.map((reqUser) => (
-                    <div 
-                      key={reqUser.uid} 
-                      className="p-3 bg-[#081525] border border-red-500/10 hover:border-red-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-wrap items-center gap-2">
-                          <span className="font-extrabold text-xs text-white uppercase">{reqUser.name}</span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-950/40 text-red-400 border border-red-900/30 rounded font-mono">
-                            {formatMvocId(reqUser.mvocId)}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-mono">{reqUser.email}</p>
-                        <p className="text-[9px] text-slate-505">Kumpulan/Chapter: {reqUser.chapter || "Tiada Chapter"}</p>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          disabled={processingDeleteUid !== null}
-                          onClick={() => setConfirmRejectUser(reqUser)}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-bold text-[10px] rounded-lg tracking-wider uppercase transition cursor-pointer select-none"
-                        >
-                          Tolak
-                        </button>
-                        <button
-                          disabled={processingDeleteUid !== null}
-                          onClick={() => setConfirmDeleteUser(reqUser)}
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-extrabold text-[10px] rounded-lg tracking-wider uppercase transition cursor-pointer select-none flex items-center gap-1 shadow-sm"
-                        >
-                          {processingDeleteUid === reqUser.uid ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                          <span>PADAM</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="border-t border-white/10 pt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsDeleteRequestsModalOpen(false)}
-                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-black text-xs rounded-xl transition uppercase tracking-wider cursor-pointer"
-                >
-                  Tutup
-                </button>
-              </div>
-
-              {/* Native Sub-Confirmation overlays inside modal */}
-              <AnimatePresence>
-                {confirmDeleteUser && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-0 z-[10006] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md rounded-2xl"
-                  >
-                    <div className="text-center p-5 bg-[#0c1e33] border border-red-500/30 rounded-2xl max-w-sm w-full space-y-4">
-                      <div className="w-12 h-12 bg-red-500/10 border border-red-500/30 text-rose-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                        <Trash2 className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-black uppercase text-red-500 tracking-wider">Sahkan Padam Akaun</h4>
-                        <p className="text-[11px] text-slate-300 leading-normal font-semibold">
-                          Adakah anda pasti mahu meluluskan pemadaman akaun untuk <span className="text-white font-extrabold">{confirmDeleteUser.name}</span> ({formatMvocId(confirmDeleteUser.mvocId || '')})? Status akaun mereka akan ditukar kepada 'Deleted' di dalam sistem.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteUser(null)}
-                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs rounded-xl transition uppercase tracking-wider cursor-pointer"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="button"
-                          disabled={processingDeleteUid !== null}
-                          onClick={() => handleApproveDeleteRequest(confirmDeleteUser)}
-                          className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-black text-xs rounded-xl transition uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          {processingDeleteUid === confirmDeleteUser.uid ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            'PADAM SEKARANG'
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence>
-                {confirmRejectUser && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-0 z-[10006] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md rounded-2xl"
-                  >
-                    <div className="text-center p-5 bg-[#0c1e33] border border-slate-500/30 rounded-2xl max-w-sm w-full space-y-4">
-                      <div className="w-12 h-12 bg-slate-500/10 border border-slate-500/30 text-slate-400 rounded-full flex items-center justify-center mx-auto">
-                        <X className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Tolak Permohonan</h4>
-                        <p className="text-[11px] text-slate-300 leading-normal font-semibold">
-                          Adakah anda pasti mahu menolak permohonan pemadaman akaun <span className="text-white font-extrabold">{confirmRejectUser.name}</span> ({formatMvocId(confirmRejectUser.mvocId || '')})? Status akaun akan dikembalikan kepada aktif.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmRejectUser(null)}
-                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-xs rounded-xl transition uppercase tracking-wider cursor-pointer"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="button"
-                          disabled={processingDeleteUid !== null}
-                          onClick={() => handleRejectDeleteRequest(confirmRejectUser)}
-                          className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white font-black text-xs rounded-xl transition uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          {processingDeleteUid === confirmRejectUser.uid ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            'TOLAK PERMOHONAN'
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
             </motion.div>
           </div>
         )}

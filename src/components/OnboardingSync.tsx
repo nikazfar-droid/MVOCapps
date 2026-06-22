@@ -196,7 +196,7 @@ export default function OnboardingSync() {
 
         const extractedChapter = chapterIdx !== -1 && matchedRow.c[chapterIdx]?.v 
           ? String(matchedRow.c[chapterIdx].v).trim() 
-          : 'Selangor Chapter';
+          : 'Zone Klang Valley';
 
         const rawTier = tierIdx !== -1 && matchedRow.c[tierIdx]?.v 
           ? String(matchedRow.c[tierIdx].v).trim().toUpperCase() 
@@ -682,7 +682,7 @@ export default function OnboardingSync() {
                     </span>
                     <div className="text-xs font-bold text-slate-800 py-1 flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                      <span>{userProfile.chapter || "Selangor Chapter"}</span>
+                      <span>{userProfile.chapter || "Zone Klang Valley"}</span>
                     </div>
                   </div>
                 </div>
