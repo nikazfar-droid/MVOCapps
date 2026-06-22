@@ -2172,21 +2172,46 @@ function AppContent({
     }
   }, [isLoggedIn]);
 
-  // Next Major Event carousel data
+  // Next Major Event carousel data with dynamic priority logic
   const sliderEvents = useMemo(() => {
-    if (firestoreEvents && firestoreEvents.length > 0) {
-      return firestoreEvents;
+    const active = events.filter(e => e.category !== 'completed');
+    const ongoing = active.filter(e => e.category === 'ongoing');
+    const upcoming = active.filter(e => e.category === 'upcoming' || !e.category);
+    
+    if (ongoing.length === 0) {
+      return upcoming.length > 0 ? upcoming : [
+        {
+          id: 'placeholder',
+          title: 'Genting Highlands Convoy 2026',
+          date: '16 Nov 2026',
+          image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+          location: 'Awana SkyWay Base Station',
+          category: 'upcoming'
+        } as any
+      ];
     }
-    return [
-      {
-        id: 'placeholder',
-        title: 'Genting Highlands Convoy 2024',
-        date: '24 August 2024 • 7:00 AM',
-        image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
-        location: 'Awana SkyWay Base Station'
+    
+    if (upcoming.length === 0) {
+      return ongoing;
+    }
+    
+    // Mixed logic: 2 ongoing, 1 upcoming in every 3 rotations
+    const mixed: any[] = [];
+    const slots = Math.max(Math.ceil(ongoing.length / 2) * 3, upcoming.length * 3);
+    let oIdx = 0;
+    let uIdx = 0;
+    
+    for (let i = 0; i < slots; i++) {
+      if (i % 3 === 2) {
+        mixed.push(upcoming[uIdx % upcoming.length]);
+        uIdx++;
+      } else {
+        mixed.push(ongoing[oIdx % ongoing.length]);
+        oIdx++;
       }
-    ];
-  }, [firestoreEvents]);
+    }
+    return mixed;
+  }, [events]);
 
   // Keep index within bounds
   useEffect(() => {
@@ -3672,53 +3697,94 @@ function AppContent({
                     )}
                   </div>
 
-                  {/* Next Major Event Banner */}
+                  {/* Next Major Event Banner Carousel */}
                   {sliderEvents[currentEventIndex] && (
-                    <div className="relative rounded-2xl overflow-hidden aspect-[1.95/1] shadow-md border border-slate-200/50 flex flex-col justify-between p-4 text-white select-none w-full">
-                      {/* Toyota Cockpit Background */}
-                      <img 
-                        src={sliderEvents[currentEventIndex].image} 
-                        alt={sliderEvents[currentEventIndex].title}
-                        className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
-                      />
-                      
-                      {/* Dark gradient overlap */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+                    <div className="space-y-3 w-full">
+                      <div className="relative rounded-2xl overflow-hidden aspect-[1.95/1] shadow-md border border-slate-200/50 w-full bg-[#0d1f35]">
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={`${sliderEvents[currentEventIndex].id}-${currentEventIndex}`}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.35, ease: 'easeInOut' }}
+                            className="absolute inset-0 flex flex-col justify-between p-4 text-white select-none"
+                          >
+                            {/* Toyota Cockpit Background */}
+                            <img 
+                              src={sliderEvents[currentEventIndex].image} 
+                              alt={sliderEvents[currentEventIndex].title}
+                              loading="lazy"
+                              className="absolute inset-0 w-full h-full object-cover brightness-[0.45] contrast-[1.05]"
+                            />
+                            
+                            {/* Dark gradient overlap */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-transparent pointer-events-none" />
 
-                      {/* Badge */}
-                      <div className="relative z-10 self-start">
-                        <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
-                          NEXT MAJOR EVENT
-                        </span>
+                            {/* Smart Alerting Badge */}
+                            <div className="relative z-10 self-start">
+                              {sliderEvents[currentEventIndex].category === 'ongoing' ? (
+                                <span className="text-[9px] bg-rose-600 text-white font-black px-2.5 py-1 rounded tracking-wider uppercase flex items-center gap-1.5 shadow-[0_0_10px_rgba(225,29,72,0.4)] border border-rose-500/20">
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                                  </span>
+                                  LIVE NOW
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2.5 py-1 rounded tracking-wider uppercase">
+                                  NEXT MAJOR EVENT
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Header, Date, & Register Button */}
+                            <div className="relative z-10 space-y-2">
+                              <div>
+                                <h4 className="text-sm font-extrabold tracking-tight leading-snug">
+                                  {sliderEvents[currentEventIndex].title}
+                                </h4>
+                                <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
+                                  {sliderEvents[currentEventIndex].date}
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const currentEvent = sliderEvents[currentEventIndex];
+                                  setCurrentTab('events');
+                                  if (currentEvent.id !== 'placeholder') {
+                                    setSelectedEventId(currentEvent.id);
+                                    triggerToast(`Mendaftar untuk ${currentEvent.title}!`, 'success');
+                                  } else {
+                                    setSelectedEventId(null);
+                                    triggerToast('Mendaftar untuk Genting Highlands Convoy!', 'success');
+                                  }
+                                }}
+                                className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
+                              >
+                                Register Now
+                              </button>
+                            </div>
+                          </motion.div>
+                        </AnimatePresence>
                       </div>
 
-                      {/* Header, Date, & Register Button */}
-                      <div className="relative z-10 space-y-2">
-                        <div>
-                          <h4 className="text-sm font-extrabold tracking-tight leading-snug">
-                            {sliderEvents[currentEventIndex].title}
-                          </h4>
-                          <p className="text-[10.5px] text-slate-200 font-semibold mt-0.5">
-                            {sliderEvents[currentEventIndex].date}
-                          </p>
+                      {/* Pagination Indicators (dot kecil) */}
+                      {sliderEvents.length > 1 && (
+                        <div className="flex justify-center items-center gap-1.5">
+                          {sliderEvents.map((_, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setCurrentEventIndex(idx)}
+                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                                currentEventIndex === idx ? 'w-4 bg-emerald-500' : 'w-1.5 bg-slate-450 opacity-40 hover:opacity-80'
+                              }`}
+                              aria-label={`Go to slide ${idx + 1}`}
+                            />
+                          ))}
                         </div>
-                        <button 
-                          onClick={() => {
-                            const currentEvent = sliderEvents[currentEventIndex];
-                            setCurrentTab('events');
-                            if (currentEvent.id !== 'placeholder') {
-                              setSelectedEventId(currentEvent.id);
-                              triggerToast(`Registering now for ${currentEvent.title}!`, 'success');
-                            } else {
-                              setSelectedEventId(null);
-                              triggerToast('Registering now for the Genting Highlands Convoy!', 'success');
-                            }
-                          }}
-                          className="bg-white hover:bg-slate-100 active:bg-slate-200 text-[#0F2D52] px-4 py-1.5 rounded-full text-[10.5px] font-black transition-colors cursor-pointer"
-                        >
-                          Register Now
-                        </button>
-                      </div>
+                      )}
                     </div>
                   )}
 
