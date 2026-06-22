@@ -4638,12 +4638,14 @@ function AppContent({
                       </div>
                     </div>
                     
-                    <div className="mt-6 text-center">
-                      <a href="/partner" className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
-                        Sertai Kami Sebagai Penaja
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
+                    {appConfig.sponsorship !== false && (
+                      <div className="mt-6 text-center">
+                        <a href="/partner" className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
+                          Sertai Kami Sebagai Penaja
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
