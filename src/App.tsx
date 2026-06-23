@@ -58,6 +58,9 @@ import {
   AlertTriangle,
   Search,
   SlidersHorizontal,
+  Filter,
+  Droplet,
+  ThermometerSun,
   Map,
   MessageSquare,
   Building2,
@@ -1679,9 +1682,33 @@ function AppContent({
   // Major component alerts logic
   const getMajorAlerts = (km: number) => {
     const alerts = [];
-    if (km >= 160000) alerts.push("⚠️ Penyejuk Enjin (Coolant) disyorkan ditukar (160k km).");
-    if (km >= 100000) alerts.push("⚠️ Busi Iridium & Cecair CVT disyorkan ditukar (100k km).");
-    else if (km >= 80000) alerts.push("⚠️ Penapis Bahan Api (Fuel Filter) disyorkan ditukar (80k km).");
+    if (km >= 160000) alerts.push({
+      part: "Coolant",
+      desc: "Penyejuk Enjin pada 160k km.",
+      icon: <ThermometerSun className="w-3 h-3 text-orange-400" />,
+      color: "text-orange-200 bg-orange-950/40 border-orange-500/20"
+    });
+    if (km >= 100000) {
+      alerts.push({
+        part: "Spark Plugs",
+        desc: "Busi Iridium (100k km).",
+        icon: <Zap className="w-3 h-3 text-yellow-400" />,
+        color: "text-yellow-200 bg-yellow-950/40 border-yellow-500/20"
+      });
+      alerts.push({
+        part: "CVT Fluid",
+        desc: "Cecair Gearbox (100k km).",
+        icon: <Droplet className="w-3 h-3 text-blue-400" />,
+        color: "text-blue-200 bg-blue-950/40 border-blue-500/20"
+      });
+    } else if (km >= 80000) {
+      alerts.push({
+        part: "Fuel Filter",
+        desc: "Penapis Bahan Api (80k km).",
+        icon: <Filter className="w-3 h-3 text-amber-400" />,
+        color: "text-amber-200 bg-amber-950/40 border-amber-500/20"
+      });
+    }
     return alerts;
   };
   const majorAlerts = getMajorAlerts(lastServiceOdometer);
@@ -4980,10 +5007,11 @@ function AppContent({
                     </p>
 
                     {majorAlerts.length > 0 && (
-                      <div className="mt-2 space-y-1">
+                      <div className="mt-3 flex flex-wrap gap-1.5">
                         {majorAlerts.map((alert, index) => (
-                          <div key={index} className="text-[10px] font-bold text-amber-200 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/20 leading-tight">
-                            {alert}
+                          <div key={index} className={`flex items-center gap-1.5 text-[9px] font-bold px-2 py-1 rounded border leading-tight ${alert.color}`}>
+                            {alert.icon}
+                            <span><strong>{alert.part}</strong>: {alert.desc}</span>
                           </div>
                         ))}
                       </div>
