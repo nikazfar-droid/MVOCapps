@@ -1684,33 +1684,35 @@ function AppContent({
     else if (km >= 80000) alerts.push("⚠️ Penapis Bahan Api (Fuel Filter) disyorkan ditukar (80k km).");
     return alerts;
   };
-  const majorAlerts = getMajorAlerts(currentOdometer);
+  const majorAlerts = getMajorAlerts(lastServiceOdometer);
 
   // Dynamically calculate remaining mileage and service status (Whichever comes first logic)
-  const serviceKmRemaining = nextServiceOdometer - currentOdometer;
   const daysRemaining = Math.ceil((new Date(nextServiceDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
   
   let serviceStatusText = "HEALTHY";
   let serviceStatusBadge = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
   let serviceCardBg = "bg-gradient-to-br from-[#0F2D52] via-[#154173] to-[#205794]";
   let serviceBarColor = "bg-emerald-400";
-  let serviceStatusDesc = `Next service in ${serviceKmRemaining.toLocaleString()} km or ${Math.max(0, daysRemaining)} days`;
+  let serviceStatusDesc = `Target: ${nextServiceOdometer.toLocaleString()} km atau ${Math.max(0, daysRemaining)} hari lagi`;
   
-  if (serviceKmRemaining <= 0 || daysRemaining <= 0) {
+  if (daysRemaining <= 0) {
     serviceStatusText = "OVERDUE";
     serviceStatusBadge = "bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse";
     serviceCardBg = "bg-gradient-to-br from-rose-950 via-red-900 to-[#1e070d]";
     serviceBarColor = "bg-red-500";
-    serviceStatusDesc = `Due ${serviceKmRemaining <= 0 ? Math.abs(serviceKmRemaining).toLocaleString() + ' km' : Math.abs(daysRemaining) + ' days'} ago! Service now.`;
-  } else if (serviceKmRemaining <= 1500 || daysRemaining <= 30) {
+    serviceStatusDesc = `Telah melepasi tarikh sasaran (${Math.abs(daysRemaining)} hari)! Sila servis segera.`;
+  } else if (daysRemaining <= 30) {
     serviceStatusText = "DUE SOON";
     serviceStatusBadge = "bg-amber-500/20 text-amber-300 border border-amber-500/30";
     serviceCardBg = "bg-gradient-to-br from-[#0F2D52] via-amber-950/80 to-[#4A3205]";
     serviceBarColor = "bg-amber-400";
-    serviceStatusDesc = `${serviceKmRemaining.toLocaleString()} km or ${daysRemaining} days left. Book soon!`;
+    serviceStatusDesc = `Sila rancang servis. Tinggal ${daysRemaining} hari lagi.`;
   }
 
-  const serviceProgressPercent = Math.max(0, Math.min(100, (serviceKmRemaining / 10000) * 100));
+  // Calculate percentage purely based on standard 180 days (6 months)
+  const totalDays = 180;
+  const daysPassed = Math.max(0, totalDays - daysRemaining);
+  const serviceProgressPercent = Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));
   
   // Temporary state for adding accessory
   const [accessoryFormName, setAccessoryFormName] = useState('');
@@ -4969,7 +4971,7 @@ function AppContent({
                       
                       {/* Dynamic status pill */}
                       <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${serviceStatusBadge}`}>
-                        {currentOdometer.toLocaleString()} km
+                        Target: {nextServiceOdometer.toLocaleString()} km
                       </span>
                     </div>
 
@@ -5152,7 +5154,7 @@ function AppContent({
 
                               <div className="space-y-2 pt-1">
                                 <span className="text-[10px] text-slate-400 block">Auto-Kira Sasaran Seterusnya:</span>
-                                <div className="grid grid-cols-3 gap-1.5">
+                                <div className="grid grid-cols-2 gap-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -5163,23 +5165,9 @@ function AppContent({
                                       setTempNextDate(d.toISOString().split('T')[0]);
                                       triggerToast('Servis Pertama (+1k km/1 Bln) diset!', 'success');
                                     }}
-                                    className="py-1.5 px-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg transition text-[9px] font-black cursor-pointer active:scale-95 leading-tight text-center"
+                                    className="py-2 px-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg transition text-[10px] font-black cursor-pointer active:scale-95 leading-tight text-center"
                                   >
-                                    Servis<br/>Pertama
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const last = parseInt(tempLastServiceOdometer) || 0;
-                                      setTempNextOdometer((last + 5000).toString());
-                                      const d = new Date(tempLastServiceDate);
-                                      d.setMonth(d.getMonth() + 3);
-                                      setTempNextDate(d.toISOString().split('T')[0]);
-                                      triggerToast('Pemanduan Lasak (+5k km/3 Bln) diset!', 'success');
-                                    }}
-                                    className="py-1.5 px-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg transition text-[9px] font-black cursor-pointer active:scale-95 leading-tight text-center"
-                                  >
-                                    Pemanduan<br/>Lasak
+                                    Servis Pertama (1k)
                                   </button>
                                   <button
                                     type="button"
@@ -5191,9 +5179,9 @@ function AppContent({
                                       setTempNextDate(d.toISOString().split('T')[0]);
                                       triggerToast('Servis Biasa (+10k km/6 Bln) diset!', 'success');
                                     }}
-                                    className="py-1.5 px-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg transition text-[9px] font-black cursor-pointer active:scale-95 leading-tight text-center"
+                                    className="py-2 px-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-lg transition text-[10px] font-black cursor-pointer active:scale-95 leading-tight text-center"
                                   >
-                                    Servis<br/>Biasa
+                                    Servis Biasa (10k)
                                   </button>
                                 </div>
                               </div>
@@ -5224,36 +5212,17 @@ function AppContent({
                               </div>
                             </div>
 
-                            {/* ZON C: BACAAN SEMASA */}
-                            <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3">
-                              <h5 className="text-[10px] text-emerald-600 uppercase tracking-wider font-black border-b border-emerald-100 pb-1">3. Bacaan Odometer Hari Ini</h5>
-                              <div className="space-y-1">
-                                <input 
-                                  type="number"
-                                  placeholder="E.g., 22550"
-                                  value={tempOdometer}
-                                  onChange={(e) => setTempOdometer(e.target.value)}
-                                  className="w-full bg-white border border-emerald-200 rounded-xl py-2.5 px-3.5 font-mono text-sm text-slate-800 focus:outline-none focus:border-emerald-400 shadow-sm"
-                                />
-                                <p className="text-[9px] text-slate-400 font-medium leading-tight pt-1">
-                                  Kemas kini odometer semasa anda di sini untuk menyemak status (Hijau/Kuning/Merah) di papan pemuka.
-                                </p>
-                              </div>
-                            </div>
-
                           </div>
 
                           <div className="flex gap-3 pt-2">
                             <button
                               onClick={async () => {
-                                const current = parseInt(tempOdometer);
                                 const next = parseInt(tempNextOdometer);
                                 const last = parseInt(tempLastServiceOdometer);
-                                if (isNaN(current) || isNaN(next) || isNaN(last)) {
-                                  triggerToast('Sila pastikan semua nombor Odometer diisi', 'error');
+                                if (isNaN(next) || isNaN(last)) {
+                                  triggerToast('Sila pastikan Odometer diisi', 'error');
                                   return;
                                 }
-                                setCurrentOdometer(current);
                                 setLastServiceOdometer(last);
                                 setLastServiceDate(tempLastServiceDate);
                                 setNextServiceOdometer(next);
@@ -5264,7 +5233,6 @@ function AppContent({
                                   try {
                                     const { updateDoc, doc } = await import('firebase/firestore');
                                     await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-                                      'vehicleInfo.currentOdometer': current,
                                       'vehicleInfo.lastServiceOdometer': last,
                                       'vehicleInfo.lastServiceDate': tempLastServiceDate,
                                       'vehicleInfo.nextServiceOdometer': next,
