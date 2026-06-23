@@ -5852,12 +5852,22 @@ function AppContent({
                                   </div>
                                 </div>
 
-                                <div className="pt-1.5 flex gap-3">
+                                <div className="pt-1.5 flex gap-2">
                                   <button
-                                    onClick={() => triggerToast('Physical receipt image sent to cloud storage!', 'success')}
+                                    onClick={() => {
+                                      setServiceRecords(prev => prev.filter(r => r.id !== viewingRecordDetails.id));
+                                      setViewingRecordDetails(null);
+                                      triggerToast('Rekod berjaya dipadam!', 'success');
+                                    }}
+                                    className="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
+                                  >
+                                    Delete
+                                  </button>
+                                  <button
+                                    onClick={() => triggerToast('Fungsi memuat naik resit belum tersedia.', 'info')}
                                     className="flex-1 py-3 bg-[#0F2D52] text-white hover:bg-[#1a4478] rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
                                   >
-                                    Print Receipt
+                                    Receipt
                                   </button>
                                   <button
                                     onClick={() => setViewingRecordDetails(null)}
