@@ -1663,6 +1663,7 @@ function AppContent({
   const [tempOdometer, setTempOdometer] = useState('22550');
   const [tempLastServiceOdometer, setTempLastServiceOdometer] = useState('15000');
   const [tempLastServiceCost, setTempLastServiceCost] = useState('');
+  const [tempServiceType, setTempServiceType] = useState('Regular Service');
   const [tempLastServiceDate, setTempLastServiceDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
@@ -5155,34 +5156,51 @@ function AppContent({
                             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                               <h5 className="text-[10px] text-slate-500 uppercase tracking-wider font-black border-b border-slate-200 pb-1">1. Rekod Servis Terakhir</h5>
                               
-                              <div className="grid grid-cols-3 gap-2">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-slate-400 block">Tarikh Servis</label>
-                                  <input 
-                                    type="date"
-                                    value={tempLastServiceDate}
-                                    onChange={(e) => setTempLastServiceDate(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
-                                  />
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 block">Jenis Servis</label>
+                                    <select
+                                      value={tempServiceType}
+                                      onChange={(e) => setTempServiceType(e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-sans text-[11px] font-bold text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    >
+                                      <option value="Regular Service">Regular Service</option>
+                                      <option value="Major Service">Major Service</option>
+                                      <option value="Emergency Assist">Emergency Assist</option>
+                                      <option value="Tuning / Mod Check">Tuning / Mod Check</option>
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 block">Tarikh Servis</label>
+                                    <input 
+                                      type="date"
+                                      value={tempLastServiceDate}
+                                      onChange={(e) => setTempLastServiceDate(e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    />
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-slate-400 block">Odometer (km)</label>
-                                  <input 
-                                    type="number"
-                                    value={tempLastServiceOdometer}
-                                    onChange={(e) => setTempLastServiceOdometer(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-slate-400 block">Kos (RM)</label>
-                                  <input 
-                                    type="number"
-                                    placeholder="Contoh: 285"
-                                    value={tempLastServiceCost}
-                                    onChange={(e) => setTempLastServiceCost(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
-                                  />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 block">Odometer (km)</label>
+                                    <input 
+                                      type="number"
+                                      value={tempLastServiceOdometer}
+                                      onChange={(e) => setTempLastServiceOdometer(e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 block">Kos (RM)</label>
+                                    <input 
+                                      type="number"
+                                      placeholder="Contoh: 285"
+                                      value={tempLastServiceCost}
+                                      onChange={(e) => setTempLastServiceCost(e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
@@ -5295,7 +5313,7 @@ function AppContent({
                                 if (tempLastServiceCost) {
                                   const newLog = {
                                     id: Date.now(),
-                                    type: 'Regular Service',
+                                    type: tempServiceType,
                                     date: tempLastServiceDate,
                                     mileage: `${last.toLocaleString()} km`,
                                     details: 'Servis disegerak secara automatik dari kemaskini Odometer.',
