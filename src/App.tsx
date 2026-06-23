@@ -5249,7 +5249,6 @@ function AppContent({
                                 </div>
                               </div>
                             </div>
-                            </div>
 
                             {/* ZON C: PANDUAN KOS SERVIS TOYOTA VELOZ */}
                             <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl space-y-2">
