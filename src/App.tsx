@@ -1447,11 +1447,7 @@ function AppContent({
     { id: 4, name: 'Dual-Dashcam 4K', desc: 'Hardwire Parking Mode', icon: 'Shield' }
   ]);
   
-  const [serviceRecords, setServiceRecords] = useState([
-    { id: 1, type: 'Regular Service', date: '2026-05-10', mileage: '20,000 km', details: 'Engine Oil Change, Oil Filter, Cabin Filter replacement. Fully healthy.', cost: 'RM 280.00', status: 'Completed' },
-    { id: 2, type: 'Tyre Alignment', date: '2026-01-12', mileage: '15,000 km', details: '4-wheel alignment and high speed balancing at Karak Auto.', cost: 'RM 95.00', status: 'Completed' },
-    { id: 3, type: 'Premium Coating', date: '2025-11-15', mileage: '10,200 km', details: 'Full body wax and 9H premium ceramic coating application.', cost: 'RM 1,200.00', status: 'Completed' }
-  ]);
+  const [serviceRecords, setServiceRecords] = useState<{ id: number, type: string, date: string, mileage: string, details: string, cost: string, status: string }[]>([]);
   
   const [isVehicleEditModalOpen, setIsVehicleEditModalOpen] = useState(false);
   const [isShareCardModalOpen, setIsShareCardModalOpen] = useState(false);
