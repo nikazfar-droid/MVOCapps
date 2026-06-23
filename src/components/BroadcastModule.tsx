@@ -50,8 +50,8 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 3 * 1024 * 1024) {
-        triggerToast('Image size exceeds 3MB limit.', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        triggerToast('Image size exceeds 10MB limit.', 'error');
         return;
       }
       if (!file.type.startsWith('image/')) {
@@ -372,7 +372,7 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
             {!imagePreview ? (
               <label className="w-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#cbd5e1] rounded-xl cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition-all bg-[#EFF4FB]">
                 <ImagePlus className="w-6 h-6 text-slate-400 mb-2" />
-                <span className="text-xs font-bold text-slate-500">Click to upload photo (Max 3MB)</span>
+                <span className="text-xs font-bold text-slate-500">Click to upload photo (Max 10MB)</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </label>
             ) : (
