@@ -91,7 +91,10 @@ import PWAInstaller from './components/PWAInstaller';
 import PWAUpdateNotifier from './components/PWAUpdateNotifier';
 import FaqPage from './components/FaqPage';
 import PartnerPage from './components/PartnerPage';
-import { auth, db } from './lib/firebase';
+import { auth, db, firebaseFunctions, storage } from './lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { compressImageToWebP } from './lib/imageUtils';
 import { collection, updateDoc, doc, deleteDoc, onSnapshot, setDoc, runTransaction, getDocsFromServer, query, where, orderBy, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { SyncedUserProfile, formatMvocId, calculateEffectiveXP } from './lib/fetchAndSyncData';
 import { formatWhatsAppNumber, isValidWhatsAppNumber } from './lib/phoneUtils';
@@ -161,6 +164,10 @@ interface Announcement {
   sender?: string;
   audience?: string;
   targetChapter?: string | null;
+  authorId?: string;
+  authorName?: string;
+  isHidden?: boolean;
+  documentId?: string;
 }
 
 interface EventItem {
@@ -1934,75 +1941,26 @@ function AppContent({
 
   const [events, setEvents] = useState<EventItem[]>([]);
 
-  // lifted Gallery Albums to top-level state for real-time interactivity & deletion
-  const [galleryAlbums, setGalleryAlbums] = useState([
-    {
-      id: 1,
-      title: 'National Gathering 2024',
-      badge: 'Official',
-      photosCount: 6,
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-      category: 'national',
-      badgeStyle: 'bg-blue-50 text-[#0F2D52] font-black border border-blue-100',
-      photos: [
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-      ]
-    },
-    {
-      id: 2,
-      title: 'Southern Chapter Convoy',
-      badge: 'Regional',
-      photosCount: 6,
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-      category: 'chapter_convoys',
-      badgeStyle: 'bg-indigo-50 text-indigo-700 font-black border border-indigo-100',
-      photos: [
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-      ]
-    },
-    {
-      id: 3,
-      title: 'CSR Day 2023',
-      badge: 'Social',
-      photosCount: 5,
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-      category: 'social',
-      badgeStyle: 'bg-amber-50 text-amber-800 font-semibold border border-amber-200/50',
-      photos: [
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-      ]
-    },
-    {
-      id: 4,
-      title: 'KL Night Cruise',
-      badge: 'Event',
-      photosCount: 5,
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-      category: 'chapter_convoys',
-      badgeStyle: 'bg-sky-50 text-sky-800 font-extrabold border border-sky-100',
-      photos: [
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-      ]
-    }
-  ]);
+  // Real-time listener for Gallery Albums from Firestore
+  const [galleryAlbums, setGalleryAlbums] = useState<any[]>([]);
+
+  useEffect(() => {
+    const albumsRef = collection(db, 'galleryAlbums');
+    // Order by ID descending to show newest first
+    const q = query(albumsRef, orderBy('id', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedAlbums: any[] = [];
+      snapshot.forEach((doc) => {
+        fetchedAlbums.push({ documentId: doc.id, ...doc.data() });
+      });
+      setGalleryAlbums(fetchedAlbums);
+    }, (error) => {
+      console.warn("Failed to listen to galleryAlbums:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Admin-only module management states (Events & Gallery)
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -2189,72 +2147,13 @@ function AppContent({
   // Gallery album form elements
   const [newAlbumTitle, setNewAlbumTitle] = useState('');
   const [newAlbumBadge, setNewAlbumBadge] = useState('Official');
-  const [newAlbumImage, setNewAlbumImage] = useState('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
   const [newAlbumCategory, setNewAlbumCategory] = useState('national');
+  const [newAlbumUploadMode, setNewAlbumUploadMode] = useState<'files'|'link'>('files');
+  const [newAlbumFiles, setNewAlbumFiles] = useState<File[]>([]);
+  const [newAlbumLink, setNewAlbumLink] = useState('');
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
-  const STATIC_ANNOUNCEMENTS: Announcement[] = [
-    { 
-      id: 1, 
-      title: 'Membership Portal Scheduled Maintenance', 
-      category: 'Official Notices', 
-      date: 'Oct 22, 2024', 
-      content: 'The MVOC digital membership portal will undergo scheduled maintenance on Saturday, 26th October from 00:00 to 04:00 MYT. Digital cards may be unavailable during this window. We recommend downloading your physical member pass to your local offline wallet or taking a screenshot of your secure barcode in advance.', 
-      urgent: true,
-      pinned: true,
-      badgeText: 'System Alert',
-      linkText: 'View Details'
-    },
-    { 
-      id: 2, 
-      title: 'Annual General Meeting (AGM) 2024: Registration Now Open', 
-      category: 'Official Notices', 
-      date: 'October 24, 2024', 
-      content: 'Calling all registered MVOC members. The Annual General Meeting for 2024 will be held at the grand physical convention hall of the Chapter HQ. Formal registrations are now officially open through the member portal to confirm attendance, select catering options, and allocate official delegate seating cards.', 
-      urgent: false,
-      pinned: false,
-      badgeText: 'Official Notice',
-      linkText: 'Read Full Notice',
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-    },
-    { 
-      id: 3, 
-      title: 'Technical Workshop Series: Maintenance & Care', 
-      category: 'Community', 
-      date: 'Oct 18, 2024', 
-      content: 'Join our upcoming community session focusing on DIY maintenance, engine health monitoring, tire safety alignment, and Veloz tech-bay sensor calibrations with certified Toyota guest technicians.', 
-      urgent: false,
-      pinned: false,
-      badgeText: 'Community',
-      linkText: 'Join Workshop',
-      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-    },
-    { 
-      id: 4, 
-      title: 'New Corporate Partner: Elite Auto Detailing Special Offer', 
-      category: 'Community', 
-      date: 'Oct 15, 2024', 
-      content: 'Active MVOC members now enjoy exclusive premium paint correction, ceramic glass coating solutions, and professional exterior shine treatments at standard partner member rates. Use coupon code ELITEVELOZ30 during verification.', 
-      urgent: false,
-      pinned: false,
-      badgeText: 'Partner Offer',
-      linkText: 'Unlock Promo Code',
-      isPromoOffer: true
-    },
-    { 
-      id: 5, 
-      title: 'Updates to the Community Code of Conduct', 
-      category: 'Governance', 
-      date: 'Oct 10, 2024', 
-      content: 'Please review the minor revisions to section 4 regarding cluster convoy protocols, general lane integrity, and emergency safety communications to align with updated road transport guidelines.', 
-      urgent: false,
-      pinned: false,
-      badgeText: 'Governance',
-      linkText: 'Review Document',
-      isDocument: true
-    }
-  ];
-
-  const [announcements, setAnnouncements] = useState<Announcement[]>(STATIC_ANNOUNCEMENTS);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [firestoreAnnouncements, setFirestoreAnnouncements] = useState<Announcement[]>([]);
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
 
@@ -2272,6 +2171,8 @@ function AppContent({
           const docData = docSnap.data();
           let title = docData.subject || '';
           let content = docData.message || '';
+          let cat = docData.category || 'Official Notices';
+          let dateStr = docData.timestamp ? new Date(docData.timestamp.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString();
           
           if (title === "APLIKASI RASMI MVOC BAKAL TIBA!" || title === "Salam Sejahtera seluruh ahli keluarga MVOC.") {
             title = "OFFICIAL MVOC MOBILE APP COMING SOON!";
@@ -2280,16 +2181,24 @@ function AppContent({
 
           list.push({
             id: docSnap.id,
-            title,
-            content,
-            category: 'Official Notices',
-            date: docData.timestamp ? new Date(docData.timestamp.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(),
+            documentId: docSnap.id,
+            title: title,
+            category: cat,
+            date: dateStr,
+            content: content,
             urgent: docData.audience === 'Admins',
+            pinned: false,
+            image: docData.image || undefined,
             badgeText: docData.audience || 'All Users',
-            linkText: 'Read Full Notice',
+            linkText: docData.linkText || 'Read Full Notice',
+            isPromoOffer: docData.isPromoOffer || false,
+            isDocument: docData.isDocument || false,
             sender: docData.sender || 'MVOC Council',
             audience: docData.audience || 'All Users',
-            targetChapter: docData.targetChapter || null
+            targetChapter: docData.targetChapter || null,
+            authorId: docData.authorId || '',
+            authorName: docData.authorName || 'Admin',
+            isHidden: docData.isHidden || false
           });
         });
         setFirestoreAnnouncements(list);
@@ -2483,6 +2392,19 @@ function AppContent({
     const isUserAdminOrSuper = userRole === 'super_admin' || userRole === 'admin';
 
     const filteredDynamic = firestoreAnnouncements.filter((item) => {
+      // 1. Hide/Unhide enforcement
+      if (item.isHidden) {
+        if (userRole === 'super_admin') {
+          // Super admin bypasses hide
+        } else if (userRole === 'admin' && item.authorId === userProfile?.uid) {
+          // Admin who created it bypasses hide
+        } else {
+          // Hidden from all other users
+          return false;
+        }
+      }
+
+      // 2. Audience Targeting enforcement
       const aud = item.audience || 'All Users';
       const tc = item.targetChapter;
       if (aud === 'All Users') return true;
@@ -2496,7 +2418,7 @@ function AppContent({
       return false;
     });
 
-    setAnnouncements([...filteredDynamic, ...STATIC_ANNOUNCEMENTS]);
+    setAnnouncements(filteredDynamic);
   }, [firestoreAnnouncements, userProfile]);
 
   // Securely mark announcement as read
@@ -2509,6 +2431,81 @@ function AppContent({
       console.error("Failed to mark announcement as read:", err);
     }
   };
+
+  // --- ANNOUNCEMENT ADMIN ACTIONS ---
+  const [isEditAnnouncementModalOpen, setIsEditAnnouncementModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+
+  const handleDeleteAnnouncement = async (item: Announcement) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${item.title}"?`)) return;
+    try {
+      if (item.documentId) {
+        await deleteDoc(doc(db, 'announcements', item.documentId));
+        triggerToast('Announcement deleted permanently.', 'success');
+      }
+    } catch (err: any) {
+      triggerToast(`Failed to delete: ${err.message}`, 'error');
+    }
+  };
+
+  const handleToggleHideAnnouncement = async (item: Announcement) => {
+    try {
+      if (item.documentId) {
+        await updateDoc(doc(db, 'announcements', item.documentId), {
+          isHidden: !item.isHidden
+        });
+        triggerToast(item.isHidden ? 'Announcement unhidden.' : 'Announcement hidden.', 'success');
+      }
+    } catch (err: any) {
+      triggerToast(`Failed to toggle visibility: ${err.message}`, 'error');
+    }
+  };
+
+  const openEditAnnouncementModal = (item: Announcement) => {
+    setEditingAnnouncement(item);
+    setIsEditAnnouncementModalOpen(true);
+  };
+
+  const handleSaveEditedAnnouncement = async () => {
+    if (!editingAnnouncement || !editingAnnouncement.documentId) return;
+    try {
+      await updateDoc(doc(db, 'announcements', editingAnnouncement.documentId), {
+        subject: editingAnnouncement.title,
+        message: editingAnnouncement.content
+      });
+      triggerToast('Announcement updated successfully.', 'success');
+      setIsEditAnnouncementModalOpen(false);
+      setEditingAnnouncement(null);
+    } catch (err: any) {
+      triggerToast(`Update failed: ${err.message}`, 'error');
+    }
+  };
+
+  const renderAdminAnnouncementActions = (item: Announcement) => {
+    const userRole = userProfile?.role || 'member';
+    const isUserAdminOrSuper = userRole === 'super_admin' || userRole === 'admin';
+    if (!isUserAdminOrSuper) return null;
+    
+    const canEditDelete = userRole === 'super_admin' || item.authorId === userProfile?.uid;
+    if (!canEditDelete) return null;
+
+    return (
+      <div className="flex items-center gap-1 mr-1 bg-slate-50/80 rounded-lg px-1.5 py-0.5 border border-slate-200">
+        <button onClick={() => openEditAnnouncementModal(item)} className="p-1 text-slate-400 hover:text-[#0066FF] cursor-pointer" title="Edit Announcement">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => handleDeleteAnnouncement(item)} className="p-1 text-slate-400 hover:text-red-500 cursor-pointer" title="Delete Announcement">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+        {userRole === 'super_admin' && (
+          <button onClick={() => handleToggleHideAnnouncement(item)} className="p-1 text-slate-400 hover:text-amber-500 cursor-pointer" title={item.isHidden ? "Unhide" : "Hide"}>
+            {item.isHidden ? <EyeOff className="w-3.5 h-3.5 text-amber-500" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
+    );
+  };
+  // ----------------------------------
 
   // Select wrapper callback
   const handleSelectAnnouncement = (item: Announcement) => {
@@ -8270,6 +8267,7 @@ function AppContent({
                                 </div>
 
                                 <div className="flex items-center gap-1 shrink-0">
+                                  {renderAdminAnnouncementActions(item)}
                                   <button
                                     onClick={() => {
                                       navigator.clipboard.writeText(`${item.title} - ${item.content}`);
@@ -8363,6 +8361,7 @@ function AppContent({
                                   </span>
 
                                   <div className="flex items-center gap-1">
+                                    {renderAdminAnnouncementActions(item)}
                                     <button
                                       onClick={() => {
                                         navigator.clipboard.writeText(`${item.title} - ${item.content}`);
@@ -8440,6 +8439,7 @@ function AppContent({
                                       <span className="text-[10px] text-slate-400 font-bold">{item.date}</span>
                                     </div>
                                     <div className="flex items-center gap-0.5 shrink-0">
+                                      {renderAdminAnnouncementActions(item)}
                                       <button
                                         onClick={() => triggerToast('Announcement link copied!', 'success')}
                                         className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
@@ -8504,6 +8504,7 @@ function AppContent({
                                       <span className="text-[10px] text-slate-400 font-bold">{item.date}</span>
                                     </div>
                                     <div className="flex items-center gap-0.5 shrink-0">
+                                      {renderAdminAnnouncementActions(item)}
                                       <button
                                         onClick={() => triggerToast('Promo code copied!', 'success')}
                                         className="text-slate-400 hover:text-slate-705 p-1 cursor-pointer"
@@ -8560,6 +8561,7 @@ function AppContent({
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  {renderAdminAnnouncementActions(item)}
                                   <button
                                     onClick={() => triggerToast('Governance link copied!', 'success')}
                                     className="p-1 px-2 text-slate-400 hover:text-[#0F2D52] cursor-pointer"
@@ -8611,6 +8613,7 @@ function AppContent({
                           >
                             <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
                               <span>{item.category} &bull; {item.date}</span>
+                              {renderAdminAnnouncementActions(item)}
                             </div>
                             <h4 className="text-xs sm:text-sm font-black text-slate-800">{item.title}</h4>
                             <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">{item.content}</p>
@@ -8639,6 +8642,7 @@ function AppContent({
                               <div className="flex justify-between items-center">
                                 <span className="text-[9px] text-[#0F2D52] font-black uppercase tracking-wider bg-blue-50/50 border border-blue-100 rounded px-1.5 py-0.5">{item.category} &bull; {item.date}</span>
                                 <div className="flex items-center gap-1.5">
+                                  {renderAdminAnnouncementActions(item)}
                                   <button
                                     onClick={() => triggerToast('Archived link copied!', 'success')}
                                     className="text-slate-400 hover:text-slate-750 cursor-pointer"
@@ -10718,6 +10722,7 @@ function AppContent({
                     onChange={(e) => setNewAlbumTitle(e.target.value)}
                     placeholder="e.g., Northern Convoy Cruise 2026"
                     className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500"
+                    disabled={isUploadingGallery}
                   />
                 </div>
 
@@ -10727,6 +10732,7 @@ function AppContent({
                     value={newAlbumCategory}
                     onChange={(e) => setNewAlbumCategory(e.target.value)}
                     className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-sans"
+                    disabled={isUploadingGallery}
                   >
                     <option value="national">National Gathering</option>
                     <option value="chapter_convoys">Chapter Convoys</option>
@@ -10742,65 +10748,168 @@ function AppContent({
                     onChange={(e) => setNewAlbumBadge(e.target.value)}
                     placeholder="e.g., Official / Regional / Chapter"
                     className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-bold text-white focus:outline-none focus:border-emerald-500"
+                    disabled={isUploadingGallery}
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-405 font-bold uppercase block">Cover Image Link URL</label>
-                  <input
-                    type="text"
-                    value={newAlbumImage}
-                    onChange={(e) => setNewAlbumImage(e.target.value)}
-                    className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
+                {/* Upload Mode Selection */}
+                <div className="pt-2 border-t border-white/10">
+                  <label className="text-[10px] text-slate-405 font-bold uppercase block mb-2">Pilih Cara Muat Naik (Maks: 8 Imej)</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewAlbumUploadMode('files')}
+                      disabled={isUploadingGallery}
+                      className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg border transition ${newAlbumUploadMode === 'files' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-[#0a1829] border-white/10 text-slate-400'}`}
+                    >
+                      Dari Peranti
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewAlbumUploadMode('link')}
+                      disabled={isUploadingGallery}
+                      className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg border transition ${newAlbumUploadMode === 'link' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-[#0a1829] border-white/10 text-slate-400'}`}
+                    >
+                      Melalui Pautan URL
+                    </button>
+                  </div>
                 </div>
+
+                {/* Input Fields based on mode */}
+                {newAlbumUploadMode === 'files' ? (
+                  <div className="space-y-1">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      disabled={isUploadingGallery}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.files || []);
+                        if (selected.length > 8) {
+                          triggerToast('Maksima 8 gambar sahaja dibenarkan!', 'error');
+                          setNewAlbumFiles(selected.slice(0, 8));
+                        } else {
+                          setNewAlbumFiles(selected);
+                        }
+                      }}
+                      className="w-full text-[10px] text-slate-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-white/10 file:text-white hover:file:bg-white/20 transition cursor-pointer"
+                    />
+                    {newAlbumFiles.length > 0 && (
+                      <p className="text-[10px] text-emerald-400 font-bold mt-1">{newAlbumFiles.length} fail dipilih.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={newAlbumLink}
+                      onChange={(e) => setNewAlbumLink(e.target.value)}
+                      placeholder="Masukkan URL Pautan (cth: https://imgur.com/image.jpg)"
+                      className="w-full bg-[#0a1829] border border-white/10 rounded-xl py-2.5 px-3.5 font-mono text-white focus:outline-none focus:border-emerald-500"
+                      disabled={isUploadingGallery}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2.5 pt-3">
                 <button
                   onClick={() => setIsUploadGalleryModalOpen(false)}
-                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
+                  disabled={isUploadingGallery}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newAlbumTitle.trim()) {
                       triggerToast('Album Title is required.', 'warning');
                       return;
                     }
-
-                    // Validation: Enforce upload quota limiting, but Admins bypass
-                    if (galleryAlbums.length >= 10 && !isAdminOrSuperAdmin()) {
-                      triggerToast('Upload quota reached. Only admins can upload more than 10 gallery albums.', 'error');
+                    if (newAlbumUploadMode === 'files' && newAlbumFiles.length === 0) {
+                      triggerToast('Sila pilih sekurang-kurangnya 1 fail.', 'warning');
+                      return;
+                    }
+                    if (newAlbumUploadMode === 'link' && !newAlbumLink.trim()) {
+                      triggerToast('Sila masukkan pautan URL.', 'warning');
+                      return;
+                    }
+                    if (!isAdminOrSuperAdmin()) {
+                      triggerToast('Sistem Keselamatan: Hanya Admin dibenarkan!', 'error');
                       return;
                     }
 
-                    const newId = galleryAlbums.length > 0 ? Math.max(...galleryAlbums.map(a => a.id)) + 1 : 1;
-                    const createdAlbum = {
-                      id: newId,
-                      title: newAlbumTitle,
-                      badge: newAlbumBadge || 'Official',
-                      photosCount: 5,
-                      image: newAlbumImage,
-                      category: newAlbumCategory,
-                      badgeStyle: 'bg-[#EFF4FB] text-[#0F2D52] font-black border border-blue-100',
-                      photos: [
-                        newAlbumImage,
-                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
-                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
-                      ]
-                    };
-                    setGalleryAlbums([createdAlbum, ...galleryAlbums]);
-                    triggerToast(`Successfully uploaded album "${newAlbumTitle}" with photos!`, 'success');
-                    setIsUploadGalleryModalOpen(false);
-                    setNewAlbumTitle('');
+                    setIsUploadingGallery(true);
+                    try {
+                      // We must use a unique ID for Firestore document.
+                      const newId = galleryAlbums.length > 0 ? Math.max(...galleryAlbums.map(a => a.id)) + 1 : Date.now();
+                      const uploadedUrls: string[] = [];
+                      const albumDocRef = doc(collection(db, 'galleryAlbums'), newId.toString());
+
+                      if (newAlbumUploadMode === 'files') {
+                        triggerToast('Memampatkan & memuat naik gambar...', 'info');
+                        // Use client-side canvas compression for zero compute cost
+                        for (const file of newAlbumFiles) {
+                          const compressedBlob = await compressImageToWebP(file);
+                          if (!compressedBlob) continue;
+                          const fileName = `gallery_processed/${newId}/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.webp`;
+                          const storageRef = ref(storage, fileName);
+                          await uploadBytesResumable(storageRef, compressedBlob, {
+                            contentType: 'image/webp',
+                            cacheControl: 'public, max-age=31536000, s-maxage=31536000'
+                          });
+                          const url = await getDownloadURL(storageRef);
+                          uploadedUrls.push(url);
+                        }
+                      } else if (newAlbumUploadMode === 'link') {
+                        triggerToast('Backend sedang memproses pautan...', 'info');
+                        // Proxy through Cloud Functions to avoid CORS
+                        const uploadProxyFn = httpsCallable(firebaseFunctions, 'uploadImageFromUrl');
+                        const result = await uploadProxyFn({ imageUrl: newAlbumLink, albumId: newId.toString() });
+                        if ((result.data as any)?.url) {
+                           uploadedUrls.push((result.data as any).url);
+                        }
+                      }
+
+                      // Save to Firestore
+                      const createdAlbum = {
+                        id: newId,
+                        title: newAlbumTitle,
+                        badge: newAlbumBadge || 'Official',
+                        photosCount: uploadedUrls.length,
+                        image: uploadedUrls[0] || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+                        category: newAlbumCategory,
+                        badgeStyle: 'bg-[#EFF4FB] text-[#0F2D52] font-black border border-blue-100',
+                        photos: uploadedUrls,
+                        uploadedBy: currentUser?.displayName || 'Admin',
+                        createdAt: serverTimestamp()
+                      };
+
+                      await setDoc(albumDocRef, createdAlbum);
+                      
+                      // Also push to local state to reflect immediately
+                      setGalleryAlbums([createdAlbum as any, ...galleryAlbums]);
+                      triggerToast(`Album "${newAlbumTitle}" selamat direkodkan!`, 'success');
+                      
+                      setIsUploadGalleryModalOpen(false);
+                      setNewAlbumTitle('');
+                      setNewAlbumFiles([]);
+                      setNewAlbumLink('');
+                    } catch (error: any) {
+                      console.error("Gallery Upload Error:", error);
+                      triggerToast(`Ralat Muat Naik: ${error.message || 'Sila cuba lagi'}`, 'error');
+                    } finally {
+                      setIsUploadingGallery(false);
+                    }
                   }}
-                  className="flex-1 py-3 bg-emerald-605 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer"
+                  disabled={isUploadingGallery}
+                  className="flex-1 py-3 bg-emerald-605 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wide rounded-xl transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  Upload
+                  {isUploadingGallery ? (
+                    <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</>
+                  ) : (
+                    'Upload'
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -11328,6 +11437,71 @@ function AppContent({
                   Lihat FAQ Penuh
                   <ArrowRight className="w-4 h-4" />
                 </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {/* EDIT ANNOUNCEMENT MODAL */}
+        {isEditAnnouncementModalOpen && editingAnnouncement && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-[#0b1c30]/60 backdrop-blur-sm" 
+              onClick={() => setIsEditAnnouncementModalOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden text-left"
+            >
+              <div className="flex justify-between items-center px-6 py-5 border-b border-slate-100">
+                <div>
+                  <h3 className="font-black text-[#0F2D52] text-xl">Edit Announcement</h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">Modify broadcast details instantly.</p>
+                </div>
+                <button
+                  onClick={() => setIsEditAnnouncementModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 overflow-y-auto">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 ml-1">Title / Subject</label>
+                  <input
+                    type="text"
+                    value={editingAnnouncement.title}
+                    onChange={(e) => setEditingAnnouncement({...editingAnnouncement, title: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5 ml-1">Message Content</label>
+                  <textarea
+                    rows={8}
+                    value={editingAnnouncement.content}
+                    onChange={(e) => setEditingAnnouncement({...editingAnnouncement, content: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-semibold resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  onClick={() => setIsEditAnnouncementModalOpen(false)}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditedAnnouncement}
+                  className="px-6 py-2.5 bg-[#0F2D52] hover:bg-[#1a3f6e] text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Save Changes
+                </button>
               </div>
             </motion.div>
           </div>

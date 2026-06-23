@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, memoryLocalCache, clearIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Dynamically set authDomain to match the current hostname to prevent cross-origin 
@@ -21,6 +22,7 @@ export const db = initializeFirestore(app, {
 }, dbId);
 
 export const storage = getStorage(app);
+export const firebaseFunctions = getFunctions(app, 'asia-southeast1');
 
 // Clear any existing persistent state from IndexedDB to ensure the user does not see stale data
 clearIndexedDbPersistence(db)
@@ -33,4 +35,3 @@ clearIndexedDbPersistence(db)
 
 export const auth = getAuth(app);
 export { CACHE_SIZE_UNLIMITED };
-

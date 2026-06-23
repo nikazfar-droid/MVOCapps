@@ -9,10 +9,12 @@ import {
   X, 
   AlertTriangle, 
   ArrowLeft,
-  Info
+  Info,
+  ImagePlus
 } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db, auth, storage } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes } from 'firebase/storage';
 
 interface BroadcastModuleProps {
   onBack: () => void;
@@ -39,8 +41,32 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [confirmText, setConfirmText] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
+  
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const characterLimit = 1000;
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 3 * 1024 * 1024) {
+        triggerToast('Image size exceeds 3MB limit.', 'error');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        triggerToast('Please upload a valid image file.', 'error');
+        return;
+      }
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
 
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
@@ -102,12 +128,22 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
 
     setIsSending(true);
     try {
-      // PUSH NOTIFICATION TRIGGER PLACEHOLDER:
-      // Call Firebase Cloud Function to send push notification to target segment here
-      // const sendBroadcastPushNotification = httpsCallable(functions, 'sendBroadcastPushNotification');
-      // await sendBroadcastPushNotification({ audience, subject, body, sender: displayEmail || 'Super Admin Council' });
+      let finalImageUrl: string | undefined = undefined;
+
+      if (selectedImage) {
+        triggerToast('Uploading and compressing image...', 'info');
+        const timestamp = Date.now();
+        const id = Math.random().toString(36).substring(2, 9);
+        const fileName = `${id}-${timestamp}.jpg`;
+        
+        const rawStorageRef = ref(storage, `gallery_raw/announcements/${fileName}`);
+        await uploadBytes(rawStorageRef, selectedImage);
+
+        const webpFileName = `${id}-${timestamp}.webp`;
+        const bucketPath = `gallery_processed/announcements/${webpFileName}`;
+        finalImageUrl = `https://firebasestorage.googleapis.com/v0/b/${rawStorageRef.bucket}/o/${encodeURIComponent(bucketPath)}?alt=media`;
+      }
       
-      // Save broadcast message as a new document in the announcements Firestore collection
       const announcementsRef = collection(db, 'announcements');
       await addDoc(announcementsRef, {
         subject: subject.trim(),
@@ -117,7 +153,11 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
         audience: audience,
         targetChapter: audience === 'Chapter Members' 
           ? (selectedTargetChapter === 'All My Chapters' ? managedChaptersList : selectedTargetChapter)
-          : null
+          : null,
+        authorId: auth.currentUser?.uid || '',
+        authorName: auth.currentUser?.displayName || displayEmail || 'Admin',
+        isHidden: false,
+        ...(finalImageUrl && { image: finalImageUrl })
       });
 
       triggerToast('Message successfully published to Announcements', 'success');
@@ -125,6 +165,7 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
       setConfirmText('');
       setSubject('');
       setBody('');
+      clearImage();
     } catch (err: any) {
       triggerToast(`Fidelity dispatch failed: ${err.message || err}`, 'error');
     } finally {
@@ -321,6 +362,30 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
             <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider ml-1 mt-0.5">
               Markdown Tips: # Heading 1  •  ## Heading 2  •  **Bold**  •  - List Item
             </p>
+          </div>
+
+          {/* Image Upload Field */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-100 mt-2">
+            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wide block ml-1">
+              Attach Visual Cover (Optional)
+            </label>
+            {!imagePreview ? (
+              <label className="w-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#cbd5e1] rounded-xl cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition-all bg-[#EFF4FB]">
+                <ImagePlus className="w-6 h-6 text-slate-400 mb-2" />
+                <span className="text-xs font-bold text-slate-500">Click to upload photo (Max 3MB)</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </label>
+            ) : (
+              <div className="relative w-full h-40 sm:h-48 rounded-xl overflow-hidden border border-slate-200 group">
+                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                <button 
+                  onClick={clearImage}
+                  className="absolute top-2 right-2 bg-slate-900/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
