@@ -5864,12 +5864,6 @@ function AppContent({
                                     Delete
                                   </button>
                                   <button
-                                    onClick={() => triggerToast('Fungsi memuat naik resit belum tersedia.', 'info')}
-                                    className="flex-1 py-3 bg-[#0F2D52] text-white hover:bg-[#1a4478] rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
-                                  >
-                                    Receipt
-                                  </button>
-                                  <button
                                     onClick={() => setViewingRecordDetails(null)}
                                     className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
                                   >
