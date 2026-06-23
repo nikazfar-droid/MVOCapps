@@ -317,6 +317,7 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
 
   // Fetch existing profile if it exists to preserve custom fields (like patch, isVerified, any manual field updates)
   let existingProfile: Partial<SyncedUserProfile> = {};
+  let profileFetchFailed = false;
   try {
     const existingDoc = await getDoc(doc(db, 'users', userId));
     if (existingDoc.exists()) {
@@ -324,19 +325,25 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
     }
   } catch (e) {
     console.warn("[ONBOARDING SYNC]: Failed to load existing profile to merge:", e);
+    profileFetchFailed = true;
   }
 
-  const finalProfile: SyncedUserProfile = {
+  const finalProfile: any = {
     uid: userId,
     email: targetEmail,
     name: resolvedData.name || existingProfile.name || (isSuperAdminEmail ? 'Nik Azfar Admin' : ''),
     mvocId: formatMvocId(resolvedData.mvocId || existingProfile.mvocId || (isSuperAdminEmail ? 'MVOC-0001' : '')),
     chapter: resolvedData.chapter || existingProfile.chapter || 'Zone Klang Valley',
     tier: resolvedData.tier || existingProfile.tier || (isSuperAdminEmail ? 'GOLD' : 'STANDARD'),
-    role: existingProfile.role || (isSuperAdminEmail ? 'super_admin' : 'member'),
     createdAt: existingProfile.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
+
+  if (existingProfile.role) {
+    finalProfile.role = existingProfile.role;
+  } else if (!profileFetchFailed && Object.keys(existingProfile).length === 0) {
+    finalProfile.role = isSuperAdminEmail ? 'super_admin' : 'member';
+  }
 
   if (resolvedData.vehiclePlate !== undefined) {
     finalProfile.vehiclePlate = resolvedData.vehiclePlate;
@@ -428,9 +435,19 @@ export async function fetchAndSyncData(userId: string, targetEmail: string): Pro
   // Write finalized profile records to Firestore
   const userPath = `users/${userId}`;
   try {
-    await setDoc(doc(db, 'users', userId), finalProfile, { merge: true });
+    const payloadForDb = { ...finalProfile };
+    if (profileFetchFailed && !existingProfile.role) {
+      delete payloadForDb.role; // Prevent accidental demotion on fetch failure
+    }
+
+    await setDoc(doc(db, 'users', userId), payloadForDb, { merge: true });
+    
+    if (!finalProfile.role) {
+      finalProfile.role = isSuperAdminEmail ? 'super_admin' : 'member';
+    }
+
     console.log(`[ONBOARDING SYNC]: User profile synchronized successfully to Firestore at users/${userId}`);
-    return finalProfile;
+    return finalProfile as SyncedUserProfile;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, userPath);
     return null;

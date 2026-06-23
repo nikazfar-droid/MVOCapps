@@ -1090,7 +1090,7 @@ export default function AdminDashboard({
               <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-center flex flex-col justify-between items-center relative order-2 md:order-1">
                 <div className="absolute top-3 left-3 bg-slate-100 text-slate-700 w-6 h-6 rounded-full font-black text-xs flex items-center justify-center border border-slate-200">2</div>
                 <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-slate-300 shadow-md mb-3">
-                  <img src={adminLeaderboard[1].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[1].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                  <img src={adminLeaderboard[1].photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adminLeaderboard[1].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
                 </div>
                 <div>
                   <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider">Silver Organizer</h4>
@@ -1108,7 +1108,7 @@ export default function AdminDashboard({
               <div className="bg-gradient-to-b from-amber-50 to-white border-2 border-amber-300 rounded-3xl p-6 shadow-md text-center flex flex-col justify-between items-center relative order-1 md:order-2 scale-105">
                 <div className="absolute -top-4 bg-amber-400 text-[#0f2d52] w-8 h-8 rounded-full font-black text-sm flex items-center justify-center border-2 border-white shadow-md animate-bounce">1</div>
                 <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-amber-400 shadow-md mb-3 mt-2">
-                  <img src={adminLeaderboard[0].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[0].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                  <img src={adminLeaderboard[0].photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adminLeaderboard[0].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
                 </div>
                 <div>
                   <h4 className="font-black text-xs text-amber-700 uppercase tracking-widest flex items-center gap-1 justify-center">
@@ -1128,7 +1128,7 @@ export default function AdminDashboard({
               <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm text-center flex flex-col justify-between items-center relative order-3 md:order-3">
                 <div className="absolute top-3 left-3 bg-[#fdf6f0] text-[#8c521f] w-6 h-6 rounded-full font-black text-xs flex items-center justify-center border border-orange-200">3</div>
                 <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-orange-200 shadow-md mb-3">
-                  <img src={adminLeaderboard[2].photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adminLeaderboard[2].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                  <img src={adminLeaderboard[2].photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adminLeaderboard[2].name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
                 </div>
                 <div>
                   <h4 className="font-extrabold text-xs text-orange-700 uppercase tracking-wider">Bronze Organizer</h4>
@@ -1192,7 +1192,7 @@ export default function AdminDashboard({
                           <td className="py-1 px-3">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-200 shrink-0">
-                                <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} alt={adm.name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
+                                <img src={adm.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adm.name} className="w-full h-full object-cover" referrerpolicy="no-referrer" />
                               </div>
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1414,7 +1414,7 @@ export default function AdminDashboard({
                             )}
                           </td>
                           <td className="py-1 px-4 flex items-center gap-2.5 h-[44px]">
-                            <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
+                            <img src={adm.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
                             <span className="text-[#0b1c30]">{adm.name}</span>
                           </td>
                           <td className="py-1 px-3 text-slate-500 font-mono font-bold">{adm.mvocId || 'N/A'}</td>

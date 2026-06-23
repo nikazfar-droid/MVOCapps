@@ -300,7 +300,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                     'border-slate-750'
                   }`}>
                     <img 
-                      src={member.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} 
+                      src={member.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} 
                       alt={member.name}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -461,7 +461,7 @@ export default function MemberDirectory({ currentUserId, triggerToast }: MemberD
                     'border-emerald-500'
                   }`}>
                     <img 
-                      src={selectedMember.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"} 
+                      src={selectedMember.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} 
                       alt={selectedMember.name} 
                       className="w-full h-full object-cover"
                     />

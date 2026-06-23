@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDoc, updateDoc, runTransaction, increment, collectionGroup, query, where } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
+import { compressImageToWebP } from '../lib/imageUtils';
 
 export interface MerchantItem {
   id: any;
@@ -65,7 +66,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'Veloz Auto Care',
     category: 'Service & Repair',
     rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: '10% Off Standard Service Menu',
     discountType: 'standard',
     promotionalText: 'Get 10% discount on standard service packages including oil changes, filter replacement, and multi-point vehicle checks.',
@@ -86,7 +87,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'Shine Master KL',
     category: 'Premium Detailing',
     rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: '15% Off Coating (Gold Members)',
     discountType: 'gold',
     promotionalText: 'Exclusive 15% discount on ultra-hard ceramic coatings and paint protection film (PPF) packages for prestigious Gold Tier members.',
@@ -107,7 +108,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'Aero Dynamics Kit',
     category: 'Accessories & Mods',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: 'Free Installation on Bodykits',
     discountType: 'featured',
     promotionalText: 'Purchase any aerodynamic splitters, spoilers, side skirts, or custom performance mod kits and get professional fitting absolutely free.',
@@ -128,7 +129,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'Formula Performance Tuning',
     category: 'Service & Repair',
     rating: 4.6,
-    image: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: 'Free Exhaust Diagnostics & Tuning Review',
     discountType: 'standard',
     promotionalText: 'Get complementary engine diagnostics check, exhaust air-flow evaluation, and custom tuning consultation from race engineers.',
@@ -149,7 +150,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'CarSpa Detailing Penang',
     category: 'Premium Detailing',
     rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1611245801312-513401562090?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: '10% Off Ceramic Coating Packages',
     discountType: 'standard',
     promotionalText: 'Treat your car to supreme polish and paint corrections and save 10% flat across all durable hard compound ceramic coatings.',
@@ -170,7 +171,7 @@ const MERCHANT_DATA: MerchantItem[] = [
     name: 'Apex Fuel & Tyres',
     category: 'Fuel & Care',
     rating: 4.5,
-    image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+    image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
     discount: 'RM30 Voucher on Premium Tyres (Set of 4)',
     discountType: 'standard',
     promotionalText: 'Purchase a set of 4 premium high-performance tyres (Michelin, Continental, or Bridgestone) and get instant RM30 flat discount along with free alignment.',
@@ -257,7 +258,7 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
           name: data.name || '',
           category: data.category || 'Service & Repair',
           rating: data.rating || 5,
-          image: data.image || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+          image: data.image || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
           discount: data.discount || '',
           discountType: data.discountType || 'standard',
           promotionalText: data.promotionalText || '',
@@ -458,11 +459,13 @@ export default function MerchantPartners({ triggerToast, userTier = 'GOLD', isAd
     try {
       setIsSaving(true);
       
-      let finalImageUrl = formImageUrl || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80';
+      let finalImageUrl = formImageUrl || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png';
       if (formImageFile) {
-        triggerToast('Uploading image...', 'info');
-        const fileRef = ref(storage, `merchants/${Date.now()}_${formImageFile.name}`);
-        const snapshot = await uploadBytesResumable(fileRef, formImageFile);
+        triggerToast('Memampat imej (WebP)...', 'info');
+        const compressedFile = await compressImageToWebP(formImageFile, 1024, 0.85); // Had saiz 1024px, 85% kualiti
+        triggerToast('Memuat naik gambar WebP...', 'info');
+        const fileRef = ref(storage, `merchants/${Date.now()}_${compressedFile.name}`);
+        const snapshot = await uploadBytesResumable(fileRef, compressedFile);
         finalImageUrl = await getDownloadURL(snapshot.ref);
       }
 

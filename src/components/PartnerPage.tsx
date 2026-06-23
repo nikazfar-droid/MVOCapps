@@ -90,7 +90,7 @@ export default function PartnerPage() {
     <div className="min-h-screen bg-[#F4F7FB] text-slate-800 font-sans pb-16">
       {/* Hero Section */}
       <div className="bg-[#0F2D52] relative overflow-hidden rounded-b-[40px] shadow-2xl pt-10 pb-24 px-6 z-10">
-        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://images.unsplash.com/photo-1555626906-fcf10d6851b4?w=1200&q=80')] bg-cover bg-center"></div>
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png')] bg-cover bg-center"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0F2D52] via-[#0F2D52]/80 to-transparent"></div>
         
         <div className="w-full max-w-4xl mx-auto relative z-20">

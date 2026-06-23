@@ -204,18 +204,20 @@ export default function OnboardingSync() {
         
         const validatedTier: 'GOLD' | 'STANDARD' = rawTier === 'GOLD' ? 'GOLD' : 'STANDARD';
 
-        // Prepare verified user profile
-        const synchronizedProfile: UserProfile = {
+        const synchronizedProfile: Partial<UserProfile> = {
           uid: userId,
           name: extractedName,
           email: targetEmailLower,
           mvocId: extractedMvocId,
           chapter: extractedChapter,
           tier: validatedTier,
-          role: isSuperAdminEmail ? 'super_admin' : 'member',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
+
+        if (isSuperAdminEmail) {
+          synchronizedProfile.role = 'super_admin';
+        }
 
         // Write user profile transaction to Firestore DB
         try {
@@ -224,7 +226,7 @@ export default function OnboardingSync() {
           console.warn("[ONBOARDING SYNC]: Unabled to persist to Firestore, keeping offline profile configuration state.", dbErr);
         }
 
-        setUserProfile(synchronizedProfile);
+        setUserProfile(synchronizedProfile as UserProfile);
         triggerToast("Membership details verified and imported from Google Sheets!", "success");
         setSyncing(false);
         return true;

@@ -443,7 +443,7 @@ export default function SuperAdminDashboard({
                     <tr key={adm.uid} className="hover:bg-slate-50/50 transition-colors h-[48px]">
                       <td className="py-1 px-4 text-left">
                         <div className="flex items-center gap-2.5">
-                          <img src={adm.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
+                          <img src={adm.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} alt={adm.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" referrerPolicy="no-referrer" />
                           <div className="flex flex-col">
                             <span className="text-[#0b1c30]">{adm.name}</span>
                             <span className="text-[9px] text-slate-400 font-mono font-medium">{adm.mvocId || 'N/A'}</span>

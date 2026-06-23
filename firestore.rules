@@ -113,7 +113,7 @@ service cloud.firestore {
          (request.resource.data.get('email', '').matches('(?i)^nikazfar@gmail\\.com$'))
         )
           ? isMasterAdmin()
-          : (isAdminOrSuperAdmin() || (
+          : ( (isAdminOrSuperAdmin() && (!isOwner(userId) || request.resource.data.get('role', 'member') == resource.data.get('role', 'member'))) || (
               isOwner(userId) && 
               (request.resource.data.get('role', 'member') == resource.data.get('role', 'member')) &&
               (request.resource.data.get('tier', 'STANDARD') == resource.data.get('tier', 'STANDARD')) &&

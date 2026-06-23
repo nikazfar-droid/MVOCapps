@@ -934,7 +934,7 @@ function AppContent({
     );
   };
 
-  const displayAvatarUrl = profileImage || userProfile?.photoURL || authUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80";
+  const displayAvatarUrl = profileImage || userProfile?.photoURL || authUser?.photoURL || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png";
 
   // Super Admin administrative states
   const [membersList, setMembersList] = useState<SyncedUserProfile[]>([]);
@@ -1675,6 +1675,7 @@ function AppContent({
     d.setMonth(d.getMonth() + 6);
     return d.toISOString().split('T')[0];
   });
+  const [serviceRecordsPage, setServiceRecordsPage] = useState(1);
 
   // Major component alerts logic
   const getMajorAlerts = (km: number) => {
@@ -1763,7 +1764,7 @@ function AppContent({
       registered: false,
       organizer: 'HQ',
       badge: 'OPEN',
-      image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 3.1493,
       longitude: 101.6938
@@ -1780,7 +1781,7 @@ function AppContent({
       organizer: 'Johor Chapter',
       badge: 'LIMITED SLOTS',
       warningText: 'Only 5 slots remaining',
-      image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 1.4622,
       longitude: 103.7644
@@ -1796,7 +1797,7 @@ function AppContent({
       registered: false,
       organizer: 'Selangor Chapter',
       badge: 'OFFICIAL CONVOY',
-      image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 3.4079,
       longitude: 101.7828
@@ -1812,7 +1813,7 @@ function AppContent({
       registered: true,
       organizer: 'Selangor Chapter',
       badge: 'ONGOING',
-      image: 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'ongoing',
       latitude: 3.0886,
       longitude: 101.5772
@@ -1828,7 +1829,7 @@ function AppContent({
       registered: false,
       organizer: 'East Coast Chapter',
       badge: 'LIVE CONVOY',
-      image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'ongoing',
       latitude: 3.8077,
       longitude: 103.3260
@@ -1844,7 +1845,7 @@ function AppContent({
       registered: true,
       organizer: 'Negeri Sembilan Chapter',
       badge: 'COMPLETED',
-      image: 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'completed',
       latitude: 2.5036,
       longitude: 101.8344
@@ -1860,7 +1861,7 @@ function AppContent({
       registered: false,
       organizer: 'Perak Chapter',
       badge: 'COMPLETED',
-      image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'completed',
       latitude: 4.4941,
       longitude: 101.3878
@@ -1876,7 +1877,7 @@ function AppContent({
       registered: false,
       organizer: 'Penang Chapter',
       badge: 'COMPLETED',
-      image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'completed',
       latitude: 5.3528,
       longitude: 100.3542
@@ -1892,7 +1893,7 @@ function AppContent({
       registered: false,
       organizer: 'HQ',
       badge: 'MEGA CONVOY',
-      image: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 2.9264,
       longitude: 101.6964
@@ -1908,7 +1909,7 @@ function AppContent({
       registered: false,
       organizer: 'East Coast Chapter',
       badge: 'SCENIC DRIVE',
-      image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 4.1278,
       longitude: 103.3934
@@ -1924,7 +1925,7 @@ function AppContent({
       registered: false,
       organizer: 'Selangor Chapter',
       badge: 'TRACK DAY',
-      image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'upcoming',
       latitude: 2.7607,
       longitude: 101.7377
@@ -1940,16 +1941,16 @@ function AppContent({
       title: 'National Gathering 2024',
       badge: 'Official',
       photosCount: 6,
-      image: 'https://images.unsplash.com/photo-1617788138017-80ad40651399?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'national',
       badgeStyle: 'bg-blue-50 text-[#0F2D52] font-black border border-blue-100',
       photos: [
-        'https://images.unsplash.com/photo-1617788138017-80ad40651399?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=850&auto=format&fit=crop&q=80'
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       ]
     },
     {
@@ -1957,16 +1958,16 @@ function AppContent({
       title: 'Southern Chapter Convoy',
       badge: 'Regional',
       photosCount: 6,
-      image: 'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'chapter_convoys',
       badgeStyle: 'bg-indigo-50 text-indigo-700 font-black border border-indigo-100',
       photos: [
-        'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1525609004556-c46c7d6cf0a3?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=850&auto=format&fit=crop&q=80'
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       ]
     },
     {
@@ -1974,15 +1975,15 @@ function AppContent({
       title: 'CSR Day 2023',
       badge: 'Social',
       photosCount: 5,
-      image: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'social',
       badgeStyle: 'bg-amber-50 text-amber-800 font-semibold border border-amber-200/50',
       photos: [
-        'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1524069290683-0457abfe42c3?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1542838132-92c53300491e?w=850&auto=format&fit=crop&q=80'
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       ]
     },
     {
@@ -1990,15 +1991,15 @@ function AppContent({
       title: 'KL Night Cruise',
       badge: 'Event',
       photosCount: 5,
-      image: 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       category: 'chapter_convoys',
       badgeStyle: 'bg-sky-50 text-sky-800 font-extrabold border border-sky-100',
       photos: [
-        'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1616422285623-13ff0162193c?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=850&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=850&auto=format&fit=crop&q=80'
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       ]
     }
   ]);
@@ -2170,7 +2171,7 @@ function AppContent({
   const [newEventLocation, setNewEventLocation] = useState('');
   const [newEventDate, setNewEventDate] = useState('');
   const [newEventOrganizer, setNewEventOrganizer] = useState('');
-  const [newEventImage, setNewEventImage] = useState('https://images.unsplash.com/photo-1617788138017-80ad40651399?w=600&auto=format&fit=crop&q=80');
+  const [newEventImage, setNewEventImage] = useState('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
   const [newEventCategory, setNewEventCategory] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming');
   const [newEventBadge, setNewEventBadge] = useState('OPEN');
   const [newEventDesc, setNewEventDesc] = useState('');
@@ -2183,11 +2184,12 @@ function AppContent({
   const [isDeleteGalleryModalOpen, setIsDeleteGalleryModalOpen] = useState(false);
   const [galleryAlbumToDelete, setGalleryAlbumToDelete] = useState<any | null>(null);
   const [deleteGalleryConfirmText, setDeleteGalleryConfirmText] = useState('');
+  const [galleryAlbumLimit, setGalleryAlbumLimit] = useState(15);
 
   // Gallery album form elements
   const [newAlbumTitle, setNewAlbumTitle] = useState('');
   const [newAlbumBadge, setNewAlbumBadge] = useState('Official');
-  const [newAlbumImage, setNewAlbumImage] = useState('https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=600&auto=format&fit=crop&q=80');
+  const [newAlbumImage, setNewAlbumImage] = useState('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
   const [newAlbumCategory, setNewAlbumCategory] = useState('national');
 
   const STATIC_ANNOUNCEMENTS: Announcement[] = [
@@ -2212,7 +2214,7 @@ function AppContent({
       pinned: false,
       badgeText: 'Official Notice',
       linkText: 'Read Full Notice',
-      image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1000&auto=format&fit=crop&q=80'
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
     },
     { 
       id: 3, 
@@ -2224,7 +2226,7 @@ function AppContent({
       pinned: false,
       badgeText: 'Community',
       linkText: 'Join Workshop',
-      image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=600&auto=format&fit=crop&q=80'
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
     },
     { 
       id: 4, 
@@ -2390,7 +2392,7 @@ function AppContent({
             registered: docData.registered || false,
             organizer: docData.organizer || 'HQ',
             badge: docData.badge || 'OPEN',
-            image: docData.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+            image: docData.image || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
             category: docData.category || 'upcoming',
             warningText: docData.warningText || '',
             creatorId: docData.creatorId || '',
@@ -2432,7 +2434,7 @@ function AppContent({
           id: 'placeholder',
           title: 'Genting Highlands Convoy 2026',
           date: '16 Nov 2026',
-          image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=600&auto=format&fit=crop&q=80',
+          image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
           location: 'Awana SkyWay Base Station',
           category: 'upcoming'
         } as any
@@ -3121,7 +3123,7 @@ function AppContent({
       isCharity: true,
       maxSlots: 60,
       joinedCount: 48,
-      image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       meetingPoint: 'Petronas Solaris Serdang, 07:00 AM',
       destination: 'Port Dickson',
       routeOverview: 'Kuala Lumpur → Melaka → Port Dickson (Coastal Drive)',
@@ -3137,7 +3139,7 @@ function AppContent({
       isCharity: false,
       maxSlots: 25,
       joinedCount: 12,
-      image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
+      image: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
       meetingPoint: 'R&R Rawang (Northbound), 06:30 AM',
       destination: 'Tanah Rata, Cameron Highlands',
       routeOverview: 'Kuala Lumpur → Tapah → Tanah Rata → Brinchang',
@@ -3248,7 +3250,7 @@ function AppContent({
     setNewEventLocation(ev.location);
     setNewEventDate(ev.date);
     setNewEventOrganizer(ev.organizer || '');
-    setNewEventImage(ev.image || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80');
+    setNewEventImage(ev.image || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
     setNewEventCategory(ev.category || 'upcoming');
     setNewEventBadge(ev.badge || 'OPEN');
     setNewEventLatitude(ev.latitude ? String(ev.latitude) : '');
@@ -3264,7 +3266,7 @@ function AppContent({
     setNewEventLocation('');
     setNewEventDate('');
     setNewEventOrganizer('');
-    setNewEventImage('https://images.unsplash.com/photo-1617788138017-80ad40651399?w=600&auto=format&fit=crop&q=80');
+    setNewEventImage('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
     setNewEventCategory('upcoming');
     setNewEventBadge('OPEN');
     setNewEventLatitude('');
@@ -4228,7 +4230,7 @@ function AppContent({
                             : 'border-white/95'
                       }`}>
                         <img 
-                          src={profileImage || "https://images.unsplash.com/photo-1542909168-82c3e7fdca5c?w=150&auto=format&fit=crop&q=80"} 
+                          src={profileImage || "https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png"} 
                           alt={`${displayName} Profile`} 
                           className="w-full h-full object-cover"
                         />
@@ -5741,45 +5743,78 @@ function AppContent({
                             </p>
                           </div>
 
-                          <div className="space-y-3.5 text-left">
-                            {serviceRecords.map((record) => (
-                              <div
-                                key={record.id}
-                                onClick={() => setViewingRecordDetails(record)}
-                                className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition cursor-pointer flex flex-col gap-2.5"
-                              >
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="space-y-0.5">
-                                    <span className="text-[10px] text-[#0F2D52] font-mono tracking-wider bg-blue-50 border border-blue-100 px-2 py-0.5 rounded font-black max-w-fit block uppercase text-left">
-                                      {record.type}
-                                    </span>
-                                    <h5 className="text-[13px] font-black text-slate-800 leading-tight pt-1">
-                                      Mileage: <span className="font-mono text-xs">{record.mileage}</span>
-                                    </h5>
-                                  </div>
+                          <div className="space-y-3.5 text-left pb-16">
+                            {(() => {
+                              const itemsPerPage = 15;
+                              const totalPages = Math.ceil(serviceRecords.length / itemsPerPage) || 1;
+                              const paginatedRecords = serviceRecords.slice((serviceRecordsPage - 1) * itemsPerPage, serviceRecordsPage * itemsPerPage);
 
-                                  <div className="space-y-1 text-right shrink-0">
-                                    <span className="text-[11px] text-emerald-600 font-extrabold bg-emerald-50 px-2.5 py-1 rounded block border border-emerald-100">
-                                      {record.status}
-                                    </span>
-                                    <span className="text-[9.5px] text-slate-400 font-bold block pt-1">
-                                      {record.date}
-                                    </span>
-                                  </div>
-                                </div>
+                              return (
+                                <>
+                                  {paginatedRecords.map((record) => (
+                                    <div
+                                      key={record.id}
+                                      onClick={() => setViewingRecordDetails(record)}
+                                      className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition cursor-pointer flex flex-col gap-2.5"
+                                    >
+                                      <div className="flex justify-between items-start gap-2">
+                                        <div className="space-y-0.5">
+                                          <span className="text-[10px] text-[#0F2D52] font-mono tracking-wider bg-blue-50 border border-blue-100 px-2 py-0.5 rounded font-black max-w-fit block uppercase text-left">
+                                            {record.type}
+                                          </span>
+                                          <h5 className="text-[13px] font-black text-slate-800 leading-tight pt-1">
+                                            Mileage: <span className="font-mono text-xs">{record.mileage}</span>
+                                          </h5>
+                                        </div>
 
-                                <p className="text-xs text-slate-505 font-semibold line-clamp-2 leading-relaxed text-left">
-                                  {record.details}
-                                </p>
+                                        <div className="space-y-1 text-right shrink-0">
+                                          <span className="text-[11px] text-emerald-600 font-extrabold bg-emerald-50 px-2.5 py-1 rounded block border border-emerald-100">
+                                            {record.status}
+                                          </span>
+                                          <span className="text-[9.5px] text-slate-400 font-bold block pt-1">
+                                            {record.date}
+                                          </span>
+                                        </div>
+                                      </div>
 
-                                <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 border-t border-slate-50 pt-2 pb-0.5">
-                                  <span>Total Cost: <strong className="text-slate-800 font-mono">{record.cost || 'RM 0.00'}</strong></span>
-                                  <span className="text-[#0F2D52] font-black inline-flex items-center gap-0.5 uppercase tracking-wider text-[9px] hover:underline">
-                                    Full Details &rarr;
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                                      <p className="text-xs text-slate-505 font-semibold line-clamp-2 leading-relaxed text-left">
+                                        {record.details}
+                                      </p>
+
+                                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 border-t border-slate-50 pt-2 pb-0.5">
+                                        <span>Total Cost: <strong className="text-slate-800 font-mono">{record.cost || 'RM 0.00'}</strong></span>
+                                        <span className="text-[#0F2D52] font-black inline-flex items-center gap-0.5 uppercase tracking-wider text-[9px] hover:underline">
+                                          Full Details &rarr;
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  {/* Service Records Pagination Controls */}
+                                  {serviceRecords.length > itemsPerPage && (
+                                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+                                      <button
+                                        onClick={() => setServiceRecordsPage(prev => Math.max(1, prev - 1))}
+                                        disabled={serviceRecordsPage === 1}
+                                        className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Previous
+                                      </button>
+                                      <span className="text-xs font-bold text-slate-400">
+                                        Page {serviceRecordsPage} of {totalPages}
+                                      </span>
+                                      <button
+                                        onClick={() => setServiceRecordsPage(prev => Math.min(totalPages, prev + 1))}
+                                        disabled={serviceRecordsPage === totalPages}
+                                        className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
 
                             {serviceRecords.length === 0 && (
                               <div className="bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-100">
@@ -7071,19 +7106,19 @@ function AppContent({
                               <div className="flex -space-x-2.5 overflow-hidden">
                                 <img 
                                   className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                                  src="https://images.unsplash.com/photo-1542909168-82c3e7fdca5c?w=60&auto=format&fit=crop&q=80" 
+                                  src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png" 
                                   alt="Attendee headshot"
                                   referrerPolicy="no-referrer"
                                 />
                                 <img 
                                   className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60&auto=format&fit=crop&q=80" 
+                                  src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png" 
                                   alt="Attendee headshot"
                                   referrerPolicy="no-referrer"
                                 />
                                 <img 
                                   className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60&auto=format&fit=crop&q=80" 
+                                  src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png" 
                                   alt="Attendee headshot"
                                   referrerPolicy="no-referrer"
                                 />
@@ -7681,7 +7716,7 @@ function AppContent({
 
                               {/* Vertical list of Album Cards */}
                               <div className="space-y-6">
-                                {filteredAlbums.map((album) => (
+                                {filteredAlbums.slice(0, galleryAlbumLimit).map((album) => (
                                   <div 
                                     key={album.id}
                                     id={`gallery-album-card-${album.id}`}
@@ -7738,6 +7773,18 @@ function AppContent({
                                   </div>
                                 ))}
 
+                                {/* Gallery Load More Button */}
+                                {filteredAlbums.length > galleryAlbumLimit && (
+                                  <div className="pt-2 text-center">
+                                    <button
+                                      onClick={() => setGalleryAlbumLimit(prev => prev + 15)}
+                                      className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-[#0F2D52] rounded-xl text-xs font-black transition cursor-pointer tracking-wide"
+                                    >
+                                      Load More Albums <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+
                                 {filteredAlbums.length === 0 && (
                                   <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center select-none space-y-2">
                                     <Image className="w-10 h-10 text-slate-350 mx-auto" />
@@ -7785,7 +7832,7 @@ function AppContent({
                                 >
                                   {/* Background poster image of convoys/trails */}
                                   <img 
-                                    src="https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=800&auto=format&fit=crop&q=80" 
+                                    src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png" 
                                     alt="Featured Aftermovie Thumbnail"
                                     referrerPolicy="no-referrer"
                                     className="w-full h-full object-cover group-hover:scale-102 transition duration-500 brightness-80"
@@ -8021,12 +8068,12 @@ function AppContent({
                                   <img
                                     src={
                                       videoProgress % 4 === 0
-                                        ? 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?w=700&auto=format&fit=crop&q=80'
+                                        ? 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
                                         : videoProgress % 4 === 1
-                                          ? 'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=700&auto=format&fit=crop&q=80'
+                                          ? 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
                                           : videoProgress % 4 === 2
-                                            ? 'https://images.unsplash.com/photo-1617788138017-80ad40651399?w=700&auto=format&fit=crop&q=80'
-                                            : 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=700&auto=format&fit=crop&q=80'
+                                            ? 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
+                                            : 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
                                     }
                                     alt="Active Video Stream"
                                     referrerPolicy="no-referrer"
@@ -10431,7 +10478,7 @@ function AppContent({
                         location: newEventLocation || 'Kuala Lumpur, Malaysia',
                         organizer: newEventOrganizer || 'HQ',
                         badge: newEventBadge || 'OPEN',
-                        image: newEventImage || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=600&auto=format&fit=crop&q=80',
+                        image: newEventImage || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
                         category: newEventCategory || 'upcoming',
                         latitude: newEventLatitude ? Number(newEventLatitude) : 3.1390,
                         longitude: newEventLongitude ? Number(newEventLongitude) : 101.6869,
@@ -10740,10 +10787,10 @@ function AppContent({
                       badgeStyle: 'bg-[#EFF4FB] text-[#0F2D52] font-black border border-blue-100',
                       photos: [
                         newAlbumImage,
-                        'https://images.unsplash.com/photo-1542362567-b07eac79094d?w=850&auto=format&fit=crop&q=80',
-                        'https://images.unsplash.com/photo-1616422285623-13ff0162193c?w=850&auto=format&fit=crop&q=80',
-                        'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=850&auto=format&fit=crop&q=80',
-                        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=850&auto=format&fit=crop&q=80'
+                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png',
+                        'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
                       ]
                     };
                     setGalleryAlbums([createdAlbum, ...galleryAlbums]);
