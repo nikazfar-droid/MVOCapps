@@ -461,7 +461,7 @@ function AppContent({
         year: dbVehicle?.year || prev.year || '2023',
         color: dbVehicle?.color || prev.color || 'White Pearl',
         memberId: formattedId,
-        photoUrl: dbVehicle?.photoUrl || prev.photoUrl || 'https://i.ibb.co/sdCNQQCr/veloz-600x338.png'
+        photoUrl: dbVehicle?.photoUrl || prev.photoUrl || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       }));
     }
   }, [userProfile]);
@@ -1412,7 +1412,7 @@ function AppContent({
     year: '2023',
     color: 'White Pearl',
     memberId: 'MVOC-99234',
-    photoUrl: 'https://i.ibb.co/sdCNQQCr/veloz-600x338.png'
+    photoUrl: 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
   });
   
   const [accessories, setAccessories] = useState([
@@ -5228,7 +5228,7 @@ function AppContent({
                               {/* Display miniature of current selected photo */}
                               <div className="flex gap-3 items-center bg-[#EFF4FB] p-2.5 rounded-xl border border-slate-200/50">
                                 <img 
-                                  src={editPhotoUrl || 'https://i.ibb.co/sdCNQQCr/veloz-600x338.png'} 
+                                  src={editPhotoUrl || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'} 
                                   alt="Preview" 
                                   referrerPolicy="no-referrer"
                                   className="w-12 h-12 object-cover rounded-lg border border-white shadow-xs bg-slate-200"
@@ -5268,70 +5268,70 @@ function AppContent({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setEditPhotoUrl('https://i.ibb.co/sdCNQQCr/veloz-600x338.png');
+                                      setEditPhotoUrl('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png');
                                       triggerToast('Memilih rupa Silver Metallic!', 'success');
                                     }}
-                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('sdCNQQCr') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
+                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('veloz-600x338.png') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
                                     title="Silver Metallic"
                                   >
-                                    <img src="https://i.ibb.co/sdCNQQCr/veloz-600x338.png" className="w-full h-full object-cover" />
-                                    {editPhotoUrl.includes('sdCNQQCr') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
+                                    <img src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png" className="w-full h-full object-cover" />
+                                    {editPhotoUrl.includes('veloz-600x338.png') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
                                   </button>
 
                                   {/* Item 2: White Pearl */}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setEditPhotoUrl('https://i.ibb.co/tMRdXpXW/BMPV-Veloz-48-600x338.png');
+                                      setEditPhotoUrl('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-48-600x338.png');
                                       triggerToast('Memilih rupa White Pearl!', 'success');
                                     }}
-                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('tMRdXpXW') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
+                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('BMPV-Veloz-48') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
                                     title="White Pearl"
                                   >
-                                    <img src="https://i.ibb.co/tMRdXpXW/BMPV-Veloz-48-600x338.png" className="w-full h-full object-cover" />
-                                    {editPhotoUrl.includes('tMRdXpXW') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
+                                    <img src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-48-600x338.png" className="w-full h-full object-cover" />
+                                    {editPhotoUrl.includes('BMPV-Veloz-48') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
                                   </button>
 
                                   {/* Item 3: Blue Metallic wt black roof */}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setEditPhotoUrl('https://i.ibb.co/rR4mY7PV/BMPV-Veloz-49-600x338.png');
+                                      setEditPhotoUrl('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-49-600x338.png');
                                       triggerToast('Memilih rupa Blue Metallic (Black Roof)!', 'success');
                                     }}
-                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('rR4mY7PV') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
+                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('BMPV-Veloz-49') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
                                     title="Blue Metallic with Black Roof"
                                   >
-                                    <img src="https://i.ibb.co/rR4mY7PV/BMPV-Veloz-49-600x338.png" className="w-full h-full object-cover" />
-                                    {editPhotoUrl.includes('rR4mY7PV') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
+                                    <img src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-49-600x338.png" className="w-full h-full object-cover" />
+                                    {editPhotoUrl.includes('BMPV-Veloz-49') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
                                   </button>
 
                                   {/* Item 4: Red Metallic */}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setEditPhotoUrl('https://i.ibb.co/KxmzgPmj/BMPV-Veloz-50-600x338.png');
+                                      setEditPhotoUrl('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-50-600x338.png');
                                       triggerToast('Memilih rupa Red Metallic!', 'success');
                                     }}
-                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('KxmzgPmj') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
+                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('BMPV-Veloz-50') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
                                     title="Red Metallic"
                                   >
-                                    <img src="https://i.ibb.co/KxmzgPmj/BMPV-Veloz-50-600x338.png" className="w-full h-full object-cover" />
-                                    {editPhotoUrl.includes('KxmzgPmj') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
+                                    <img src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-50-600x338.png" className="w-full h-full object-cover" />
+                                    {editPhotoUrl.includes('BMPV-Veloz-50') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
                                   </button>
 
                                   {/* Item 5: Metallic Bluish Black */}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setEditPhotoUrl('https://i.ibb.co/nMC52W9S/BMPV-Veloz-52-600x338.png');
+                                      setEditPhotoUrl('https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-52-600x338.png');
                                       triggerToast('Memilih rupa Metallic Bluish Black!', 'success');
                                     }}
-                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('nMC52W9S') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
+                                    className={`relative rounded-lg overflow-hidden border ${editPhotoUrl.includes('BMPV-Veloz-52') ? 'border-[#0F2D52] ring-2 ring-[#0F2D52]' : 'border-slate-200'} cursor-pointer h-10`}
                                     title="Metallic Bluish Black"
                                   >
-                                    <img src="https://i.ibb.co/nMC52W9S/BMPV-Veloz-52-600x338.png" className="w-full h-full object-cover" />
-                                    {editPhotoUrl.includes('nMC52W9S') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
+                                    <img src="https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/BMPV-Veloz-52-600x338.png" className="w-full h-full object-cover" />
+                                    {editPhotoUrl.includes('BMPV-Veloz-52') && <div className="absolute inset-0 bg-black/35 flex items-center justify-center"><Check className="w-4 h-4 text-white stroke-[3.5]" /></div>}
                                   </button>
                                 </div>
                               </div>
