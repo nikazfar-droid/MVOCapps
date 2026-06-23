@@ -45,7 +45,7 @@ export default function BroadcastModule({ onBack, triggerToast, displayEmail, ma
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const characterLimit = 1000;
+  const characterLimit = 2500;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
