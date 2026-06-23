@@ -463,7 +463,20 @@ function AppContent({
         memberId: formattedId,
         photoUrl: dbVehicle?.photoUrl || prev.photoUrl || 'https://raw.githubusercontent.com/nikazfar-droid/MVOCapps/Developer/assets/images/cars/veloz-600x338.png'
       }));
-    }
+
+      // Inisialisasi Data Odometer & Tarikh Servis dari Firestore
+      if (dbVehicle?.currentOdometer !== undefined) {
+        setCurrentOdometer(dbVehicle.currentOdometer);
+        setTempOdometer(dbVehicle.currentOdometer.toString());
+      }
+      if (dbVehicle?.nextServiceOdometer !== undefined) {
+        setNextServiceOdometer(dbVehicle.nextServiceOdometer);
+        setTempNextOdometer(dbVehicle.nextServiceOdometer.toString());
+      }
+      if (dbVehicle?.nextServiceDate) {
+        setNextServiceDate(dbVehicle.nextServiceDate);
+        setTempNextDate(dbVehicle.nextServiceDate);
+      }
   }, [userProfile]);
 
   const handleToggleDirectoryVisible = async (visible: boolean) => {
@@ -1628,31 +1641,42 @@ function AppContent({
   // Odometer and service status interactivity states
   const [currentOdometer, setCurrentOdometer] = useState(22550);
   const [nextServiceOdometer, setNextServiceOdometer] = useState(25000);
+  const [nextServiceDate, setNextServiceDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString().split('T')[0];
+  });
   const [isMileageModalOpen, setIsMileageModalOpen] = useState(false);
   const [tempOdometer, setTempOdometer] = useState('22550');
   const [tempNextOdometer, setTempNextOdometer] = useState('25000');
+  const [tempNextDate, setTempNextDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString().split('T')[0];
+  });
 
-  // Dynamically calculate remaining mileage and service status
+  // Dynamically calculate remaining mileage and service status (Whichever comes first logic)
   const serviceKmRemaining = nextServiceOdometer - currentOdometer;
+  const daysRemaining = Math.ceil((new Date(nextServiceDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
   
   let serviceStatusText = "HEALTHY";
   let serviceStatusBadge = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
   let serviceCardBg = "bg-gradient-to-br from-[#0F2D52] via-[#154173] to-[#205794]";
   let serviceBarColor = "bg-emerald-400";
-  let serviceStatusDesc = `Next service due in ${serviceKmRemaining.toLocaleString()} km`;
+  let serviceStatusDesc = `Next service in ${serviceKmRemaining.toLocaleString()} km or ${Math.max(0, daysRemaining)} days`;
   
-  if (serviceKmRemaining <= 0) {
+  if (serviceKmRemaining <= 0 || daysRemaining <= 0) {
     serviceStatusText = "OVERDUE";
     serviceStatusBadge = "bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse";
     serviceCardBg = "bg-gradient-to-br from-rose-950 via-red-900 to-[#1e070d]";
     serviceBarColor = "bg-red-500";
-    serviceStatusDesc = `Due ${Math.abs(serviceKmRemaining).toLocaleString()} km ago! Service now.`;
-  } else if (serviceKmRemaining < 1500) {
+    serviceStatusDesc = `Due ${serviceKmRemaining <= 0 ? Math.abs(serviceKmRemaining).toLocaleString() + ' km' : Math.abs(daysRemaining) + ' days'} ago! Service now.`;
+  } else if (serviceKmRemaining <= 1500 || daysRemaining <= 30) {
     serviceStatusText = "DUE SOON";
     serviceStatusBadge = "bg-amber-500/20 text-amber-300 border border-amber-500/30";
     serviceCardBg = "bg-gradient-to-br from-[#0F2D52] via-amber-950/80 to-[#4A3205]";
     serviceBarColor = "bg-amber-400";
-    serviceStatusDesc = `${serviceKmRemaining.toLocaleString()} km remaining. Book space soon!`;
+    serviceStatusDesc = `${serviceKmRemaining.toLocaleString()} km or ${daysRemaining} days left. Book soon!`;
   }
 
   const serviceProgressPercent = Math.max(0, Math.min(100, (serviceKmRemaining / 10000) * 100));
@@ -5081,30 +5105,46 @@ function AppContent({
                               />
                             </div>
 
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wider block">Next Service Date</label>
+                              <input 
+                                type="date"
+                                value={tempNextDate}
+                                onChange={(e) => setTempNextDate(e.target.value)}
+                                className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 font-mono text-sm text-[#0F2D52] font-black focus:outline-none focus:border-[#0F2D52]"
+                              />
+                            </div>
+
                             <div className="space-y-2.5">
-                              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Standard Intervals</span>
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Toyota Veloz Maintenance</span>
                               <div className="grid grid-cols-2 gap-2">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     const current = parseInt(tempOdometer) || currentOdometer;
-                                    setTempNextOdometer((current + 5000).toString());
-                                    triggerToast('Target adjusted to +5,000 km!', 'success');
+                                    setTempNextOdometer((current + 1000).toString());
+                                    const d = new Date();
+                                    d.setMonth(d.getMonth() + 1);
+                                    setTempNextDate(d.toISOString().split('T')[0]);
+                                    triggerToast('Servis Pertama: +1,000 km or 1 Bulan!', 'success');
                                   }}
                                   className="py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl transition text-[11px] font-black cursor-pointer active:scale-95"
                                 >
-                                  +5,000 km (Semi)
+                                  Servis Pertama (1k km)
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     const current = parseInt(tempOdometer) || currentOdometer;
                                     setTempNextOdometer((current + 10000).toString());
-                                    triggerToast('Target adjusted to +10,000 km!', 'success');
+                                    const d = new Date();
+                                    d.setMonth(d.getMonth() + 6);
+                                    setTempNextDate(d.toISOString().split('T')[0]);
+                                    triggerToast('Servis Biasa: +10,000 km or 6 Bulan!', 'success');
                                   }}
                                   className="py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl transition text-[11px] font-black cursor-pointer active:scale-95"
                                 >
-                                  +10,000 km (Fully)
+                                  Servis Biasa (10k km)
                                 </button>
                               </div>
                             </div>
@@ -5116,17 +5156,33 @@ function AppContent({
 
                           <div className="flex gap-3 pt-2">
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 const current = parseInt(tempOdometer);
                                 const next = parseInt(tempNextOdometer);
                                 if (isNaN(current) || isNaN(next)) {
-                                  triggerToast('Please enter a valid odometer number', 'error');
+                                  triggerToast('Sila masukkan nilai Odometer yang sah', 'error');
                                   return;
                                 }
                                 setCurrentOdometer(current);
                                 setNextServiceOdometer(next);
+                                setNextServiceDate(tempNextDate);
                                 setIsMileageModalOpen(false);
-                                triggerToast('Engine status and odometer updated!', 'success');
+                                
+                                if (auth.currentUser) {
+                                  try {
+                                    const { updateDoc, doc } = await import('firebase/firestore');
+                                    await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                                      'vehicleInfo.currentOdometer': current,
+                                      'vehicleInfo.nextServiceOdometer': next,
+                                      'vehicleInfo.nextServiceDate': tempNextDate
+                                    });
+                                    triggerToast('Rekod minyak hitam berjaya disimpan ke pangkalan data!', 'success');
+                                  } catch (error) {
+                                    triggerToast('Gagal menyimpan rekod servis', 'error');
+                                  }
+                                } else {
+                                  triggerToast('Status enjin dikemaskini (sementara)', 'info');
+                                }
                               }}
                               className="flex-1 py-3 bg-[#0F2D52] hover:bg-[#1a4478] text-white rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
                             >
