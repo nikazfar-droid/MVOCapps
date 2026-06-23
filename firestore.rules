@@ -219,7 +219,7 @@ service cloud.firestore {
     }
 
     // Gallery albums collection
-    match /gallery/{albumId} {
+    match /galleryAlbums/{albumId} {
       allow read: if isNotSuspended() && isSignedIn();
       allow write: if isNotSuspended() && isAdminOrSuperAdmin();
     }
