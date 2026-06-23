@@ -1640,7 +1640,6 @@ function AppContent({
   const [benefitCategory, setBenefitCategory] = useState('All');
   const [isAddAccessoryModalOpen, setIsAddAccessoryModalOpen] = useState(false);
   const [isServiceLogsModalOpen, setIsServiceLogsModalOpen] = useState(false);
-  const [isAddServiceLogModalOpen, setIsAddServiceLogModalOpen] = useState(false);
   const [viewingRecordDetails, setViewingRecordDetails] = useState<typeof serviceRecords[0] | null>(null);
   
   // Temporary forms state for editing vehicle info
@@ -1667,6 +1666,7 @@ function AppContent({
   const [isMileageModalOpen, setIsMileageModalOpen] = useState(false);
   const [tempOdometer, setTempOdometer] = useState('22550');
   const [tempLastServiceOdometer, setTempLastServiceOdometer] = useState('15000');
+  const [tempLastServiceCost, setTempLastServiceCost] = useState('');
   const [tempLastServiceDate, setTempLastServiceDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
@@ -5159,14 +5159,14 @@ function AppContent({
                             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                               <h5 className="text-[10px] text-slate-500 uppercase tracking-wider font-black border-b border-slate-200 pb-1">1. Rekod Servis Terakhir</h5>
                               
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
                                   <label className="text-[10px] text-slate-400 block">Tarikh Servis</label>
                                   <input 
                                     type="date"
                                     value={tempLastServiceDate}
                                     onChange={(e) => setTempLastServiceDate(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -5175,7 +5175,17 @@ function AppContent({
                                     type="number"
                                     value={tempLastServiceOdometer}
                                     onChange={(e) => setTempLastServiceOdometer(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-slate-400 block">Kos (RM)</label>
+                                  <input 
+                                    type="number"
+                                    placeholder="Contoh: 285"
+                                    value={tempLastServiceCost}
+                                    onChange={(e) => setTempLastServiceCost(e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-1.5 font-mono text-[11px] text-[#0F2D52] focus:outline-none focus:border-[#0F2D52]"
                                   />
                                 </div>
                               </div>
@@ -5239,6 +5249,35 @@ function AppContent({
                                 </div>
                               </div>
                             </div>
+                            </div>
+
+                            {/* ZON C: PANDUAN KOS SERVIS TOYOTA VELOZ */}
+                            <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl space-y-2">
+                              <h5 className="text-[10px] text-amber-600 uppercase tracking-wider font-black border-b border-amber-100 pb-1 flex items-center gap-1">
+                                <Info className="w-3 h-3" /> Anggaran Kos Servis (MaxCheck)
+                              </h5>
+                              <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-600">
+                                <div className="bg-white p-1.5 rounded border border-slate-100">
+                                  <div className="font-black text-slate-800">1,000 km (Wajib Pertama)</div>
+                                  <div className="text-amber-600 font-bold">~RM 175 - RM 205</div>
+                                </div>
+                                <div className="bg-white p-1.5 rounded border border-slate-100">
+                                  <div className="font-black text-slate-800">10,000 km (Advance)</div>
+                                  <div className="text-amber-600 font-bold">~RM 255 - RM 285</div>
+                                </div>
+                                <div className="bg-white p-1.5 rounded border border-slate-100">
+                                  <div className="font-black text-slate-800">40,000 km (Advance Plus)</div>
+                                  <div className="text-amber-600 font-bold">~RM 465 - RM 495</div>
+                                </div>
+                                <div className="bg-white p-1.5 rounded border border-amber-200 bg-amber-50">
+                                  <div className="font-black text-amber-900">100,000 km (Major)</div>
+                                  <div className="text-amber-700 font-bold">~RM 270 - RM 495+</div>
+                                </div>
+                              </div>
+                              <p className="text-[8px] text-slate-400 leading-tight">
+                                *Harga berubah mengikut penukaran tambahan seperti CVT Fluid & Iridium Spark Plugs pada 100k km.
+                              </p>
+                            </div>
 
                           </div>
 
@@ -5256,6 +5295,20 @@ function AppContent({
                                 setNextServiceOdometer(next);
                                 setNextServiceDate(tempNextDate);
                                 setIsMileageModalOpen(false);
+                                
+                                // Auto-log into service history
+                                if (tempLastServiceCost) {
+                                  const newLog = {
+                                    id: Date.now(),
+                                    type: 'Regular Service',
+                                    date: tempLastServiceDate,
+                                    mileage: `${last.toLocaleString()} km`,
+                                    details: 'Servis disegerak secara automatik dari kemaskini Odometer.',
+                                    cost: `RM ${tempLastServiceCost}`,
+                                    status: 'Completed'
+                                  };
+                                  setServiceRecords((prev) => [newLog, ...prev]);
+                                }
                                 
                                 if (auth.currentUser) {
                                   try {
@@ -5663,21 +5716,7 @@ function AppContent({
                             <ArrowLeft className="w-4.5 h-4.5 text-white stroke-[2.5]" />
                             <span>Close</span>
                           </button>
-                          <h3 className="text-sm font-black tracking-tight uppercase">Service Records</h3>
-                          <button
-                            onClick={() => {
-                              setServiceFormType('Regular Service');
-                              setServiceFormDate('');
-                              setServiceFormMileage('');
-                              setServiceFormDetails('');
-                              setServiceFormCost('');
-                              setIsAddServiceLogModalOpen(true);
-                            }}
-                            className="text-xs bg-[#EFF4FB] text-[#0F2D52] font-black px-3.5 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1 active:scale-95 transition cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>New Service</span>
-                          </button>
+                          <h3 className="text-sm font-black tracking-tight uppercase mr-8">Service Records</h3>
                         </div>
 
                         {/* Scrolling view of log listing */}
@@ -5737,128 +5776,6 @@ function AppContent({
                             )}
                           </div>
                         </div>
-
-                        {/* Backing sheet modal to register NEW SERVICE DATA RECORD */}
-                        <AnimatePresence>
-                          {isAddServiceLogModalOpen && (
-                            <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setIsAddServiceLogModalOpen(false)}
-                                className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
-                              />
-
-                              <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="relative w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-5 z-20 flex flex-col gap-4 text-left select-none overflow-hidden"
-                              >
-                                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                                  <h4 className="text-sm font-black text-slate-850">Register New Service</h4>
-                                  <button onClick={() => setIsAddServiceLogModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-
-                                <div className="space-y-3.5 text-xs text-slate-700 font-bold">
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-450 uppercase">Service Type</label>
-                                    <select
-                                      value={serviceFormType}
-                                      onChange={(e) => setServiceFormType(e.target.value)}
-                                      className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 font-bold text-slate-800 focus:outline-none focus:border-[#0F2D52] cursor-pointer"
-                                    >
-                                      <option value="Regular Service">Regular Service</option>
-                                      <option value="Major Service">Major Service</option>
-                                      <option value="Emergency Assist">Emergency Assist</option>
-                                      <option value="Tuning / Mod Check">Tuning / Mod Check</option>
-                                    </select>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-3.5">
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] text-slate-450 uppercase">Date</label>
-                                      <input
-                                        type="date"
-                                        value={serviceFormDate}
-                                        onChange={(e) => setServiceFormDate(e.target.value)}
-                                        className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 text-slate-800 focus:outline-none focus:border-[#0F2D52] cursor-pointer"
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] text-slate-450 uppercase">Mileage</label>
-                                      <input
-                                        type="text"
-                                        placeholder="E.g., 25,000 km"
-                                        value={serviceFormMileage}
-                                        onChange={(e) => setServiceFormMileage(e.target.value)}
-                                        className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 text-slate-800 focus:outline-none focus:border-[#0F2D52]"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-450 uppercase">Details & Work Logs</label>
-                                    <textarea
-                                      rows={2}
-                                      placeholder="E.g., Engine oil change, oil filter, brake check..."
-                                      value={serviceFormDetails}
-                                      onChange={(e) => setServiceFormDetails(e.target.value)}
-                                      className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 text-slate-800 focus:outline-none focus:border-[#0F2D52] resize-none"
-                                    />
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] text-slate-450 uppercase">Total Cost (RM)</label>
-                                    <input
-                                      type="text"
-                                      placeholder="E.g., 350.00"
-                                      value={serviceFormCost}
-                                      onChange={(e) => setServiceFormCost(e.target.value)}
-                                      className="w-full bg-[#EFF4FB] border border-slate-200 rounded-xl py-3 px-3.5 text-slate-800 focus:outline-none focus:border-[#0F2D52]"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex gap-3 pt-2">
-                                  <button
-                                    onClick={() => {
-                                      if (!serviceFormDate || !serviceFormMileage) {
-                                        triggerToast('Please fill in the date and vehicle mileage', 'error');
-                                        return;
-                                      }
-                                      const newLog = {
-                                        id: Date.now(),
-                                        type: serviceFormType,
-                                        date: serviceFormDate,
-                                        mileage: serviceFormMileage,
-                                        details: serviceFormDetails || 'Routine maintenance',
-                                        cost: serviceFormCost ? `RM ${serviceFormCost.replace(/[^\d.]/g, '')}` : 'RM 0.00',
-                                        status: 'Completed'
-                                      };
-                                      setServiceRecords((prev) => [newLog, ...prev]);
-                                      setIsAddServiceLogModalOpen(false);
-                                      triggerToast('New service record successfully saved!', 'success');
-                                    }}
-                                    className="flex-1 py-3 bg-[#0F2D52] hover:bg-[#1c487a] text-white rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
-                                  >
-                                    Save Log
-                                  </button>
-                                  <button
-                                    onClick={() => setIsAddServiceLogModalOpen(false)}
-                                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition cursor-pointer text-center min-h-[44px]"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </motion.div>
-                            </div>
-                          )}
-                        </AnimatePresence>
 
                         {/* DETAILED DRILLDOWN POPUP VIEW FOR CHOSEN LOG RECORD */}
                         <AnimatePresence>
