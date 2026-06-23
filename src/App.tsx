@@ -5245,10 +5245,15 @@ function AppContent({
                                         onChange={(e) => {
                                           const file = e.target.files?.[0];
                                           if (file) {
+                                            // Hadkan saiz kepada 500KB untuk memastikan saiz Base64 tidak melebihi had 1MB dokumen Firestore
+                                            if (file.size > 500 * 1024) {
+                                              triggerToast('Saiz gambar melebihi 500KB. Sila pilih gambar bersaiz lebih kecil.', 'error');
+                                              return;
+                                            }
                                             const reader = new FileReader();
                                             reader.onloadend = () => {
                                               setEditPhotoUrl(reader.result as string);
-                                              triggerToast('Photo successfully uploaded!', 'success');
+                                              triggerToast('Gambar berjaya dimuat naik!', 'success');
                                             };
                                             reader.readAsDataURL(file);
                                           }
